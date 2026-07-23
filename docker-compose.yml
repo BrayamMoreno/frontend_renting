@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  # Frontend Web (Angular SPA + Nginx Production Server)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: renting_frontend
+    restart: always
+    ports:
+      - "80:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
