@@ -14,10 +14,10 @@ jobs:
       - name: Ejecutar despliegue en la VPS por SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT }}
+          host: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
+          username: ${{ secrets.SSH_USER || vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY || vars.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
           script: |
             # Navegar a la carpeta del proyecto en la VPS
             cd ~/monorepo/frontend
