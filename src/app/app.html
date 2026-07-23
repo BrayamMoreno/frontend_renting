@@ -1,0 +1,222 @@
+<ng-container *ngIf="authService.authChecked(); else loader">
+
+  <div class="flex h-screen overflow-hidden bg-slate-50">
+
+    <!-- Sidebar Navigation (Solo si hay usuario) -->
+    <aside *ngIf="authService.currentUser()"
+      class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 animate-slide-right">
+      <div class="px-6 h-20 border-b border-slate-50 flex items-center gap-2">
+        <div class="w-10 h-10 flex items-center justify-center shrink-0">
+          <img src="Logo.svg" alt="Company Logo" class="w-full h-full object-contain">
+        </div>
+        <div class="flex flex-col justify-center h-full pt-1">
+          <h2 class="text-sm font-bold text-slate-800 leading-none mb-0 w-auto">Renting Manager</h2>
+          <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 leading-none">Trazabilidad IT</p>
+        </div>
+      </div>
+
+      <nav class="flex-1 px-4 py-8 space-y-4 overflow-y-auto custom-scrollbar">
+        <a *ngIf="authService.hasPermission('ver_dashboard')" routerLink="/dashboard" routerLinkActive="active"
+          class="nav-link">
+          <mat-icon>dashboard</mat-icon>
+          <span class="font-medium">Dashboard</span>
+        </a>
+        <a *ngIf="authService.hasPermission('gestionar_inventario')" routerLink="/ingreso" routerLinkActive="active"
+          class="nav-link">
+          <mat-icon>add_circle_outline</mat-icon>
+          <span class="font-medium">Ingreso</span>
+        </a>
+        <a *ngIf="authService.hasPermission('ver_inventario')" routerLink="/historial-entregas" routerLinkActive="active"
+          class="nav-link">
+          <mat-icon>local_shipping</mat-icon>
+          <span class="font-medium">Historial Entregas</span>
+        </a>
+        <!-- Dropdown: Inventario (agrupa Inventario, Pendientes Devolución y Bajas) -->
+        <div *ngIf="authService.hasPermission('ver_inventario') || authService.hasPermission('aprobar_devolucion')" class="space-y-1">
+          <button (click)="toggleInventarioDropdown()" 
+            [class.active]="isInventarioRouteActive()"
+            class="nav-link w-full text-left flex items-center justify-between cursor-pointer border-none bg-transparent">
+            <div class="flex items-center gap-3">
+              <mat-icon>inventory_2</mat-icon>
+              <span class="font-medium">Inventario</span>
+            </div>
+            <mat-icon class="transition-transform duration-200" [class.rotate-180]="inventarioDropdownOpen()">keyboard_arrow_down</mat-icon>
+          </button>
+          
+          <div *ngIf="inventarioDropdownOpen()" class="pl-4 space-y-1 overflow-hidden transition-all duration-300 animate-in slide-in-from-top-2">
+            <a *ngIf="authService.hasPermission('ver_inventario')" routerLink="/inventario" routerLinkActive="active-sub"
+              class="nav-sub-link">
+              <mat-icon class="scale-75">list_alt</mat-icon>
+              <span class="font-medium text-xs">Inventario General</span>
+            </a>
+            
+            <a *ngIf="authService.hasPermission('aprobar_devolucion')" routerLink="/pendientes-devolucion"
+              routerLinkActive="active-sub" class="nav-sub-link relative">
+              <mat-icon class="scale-75">hourglass_top</mat-icon>
+              <span class="font-medium text-xs">Pendientes Devolución</span>
+              <span *ngIf="storage.alertasNoLeidas().length > 0"
+                class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-black flex items-center justify-center animate-pulse">
+                {{ storage.alertasNoLeidas().length }}
+              </span>
+            </a>
+
+            <a *ngIf="authService.hasPermission('ver_inventario')" routerLink="/bajas" routerLinkActive="active-sub"
+              class="nav-sub-link">
+              <mat-icon class="scale-75">archive</mat-icon>
+              <span class="font-medium text-xs">Equipos Dados de Baja</span>
+            </a>
+          </div>
+        </div>
+
+        <a *ngIf="authService.hasPermission('gestionar_inventario')" routerLink="/alistamiento"
+          routerLinkActive="active" class="nav-link">
+          <mat-icon>fact_check</mat-icon>
+          <span class="font-medium">Alistamientos</span>
+        </a>
+        <a *ngIf="authService.hasPermission('gestionar_inventario')" routerLink="/generar-acta"
+          routerLinkActive="active" class="nav-link">
+          <mat-icon>description</mat-icon>
+          <span class="font-medium">Generar Acta</span>
+        </a>
+        <a *ngIf="authService.hasPermission('generar_devolucion') || authService.hasPermission('aprobar_devolucion')" routerLink="/devoluciones" routerLinkActive="active"
+          class="nav-link">
+          <mat-icon>assignment_return</mat-icon>
+          <span class="font-medium">Generar Devolución</span>
+        </a>
+        <a *ngIf="authService.hasPermission('confirmar_devolucion')" routerLink="/confirmacion-proveedor"
+          routerLinkActive="active" class="nav-link">
+          <mat-icon>fact_check</mat-icon>
+          <span class="font-medium">Confirmación Prov.</span>
+        </a>
+        <a *ngIf="authService.hasPermission('ver_inventario')" routerLink="/historial-devoluciones"
+          routerLinkActive="active" class="nav-link">
+          <mat-icon>history</mat-icon>
+          <span class="font-medium">Historial Devoluciones</span>
+        </a>
+        <div class="pt-4 pb-2">
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-2">Configuración</p>
+          <a routerLink="/profile" routerLinkActive="active" class="nav-link">
+            <mat-icon>person_outline</mat-icon>
+            <span class="font-medium">Mi Perfil</span>
+          </a>
+          <a *ngIf="authService.hasPermission('gestionar_catalogos')" routerLink="/catalogos" routerLinkActive="active"
+            class="nav-link">
+            <mat-icon>menu_book</mat-icon>
+            <span class="font-medium">Catálogos</span>
+          </a>
+          <a *ngIf="authService.hasPermission('gestionar_usuarios')" routerLink="/users" routerLinkActive="active"
+            class="nav-link">
+            <mat-icon>people_outline</mat-icon>
+            <span class="font-medium">Usuarios</span>
+          </a>
+          <a *ngIf="authService.hasPermission('gestionar_usuarios')" routerLink="/roles" routerLinkActive="active"
+            class="nav-link">
+            <mat-icon>security</mat-icon>
+            <span class="font-medium">Roles y Permisos</span>
+          </a>
+          <a *ngIf="authService.hasPermission('gestionar_usuarios')" routerLink="/backups" routerLinkActive="active"
+            class="nav-link">
+            <mat-icon>backup</mat-icon>
+            <span class="font-medium">Copias de Seguridad</span>
+          </a>
+        </div>
+      </nav>
+
+    </aside>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 flex flex-col min-w-0 h-full relative">
+
+      <!-- Header (Solo si hay usuario) -->
+      <header *ngIf="authService.currentUser()"
+        class="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0 z-20">
+        <div class="flex items-center h-full">
+          <h1 class="text-xl font-bold text-slate-800 tracking-tight m-0 leading-none flex items-center">Renting Manager</h1>
+        </div>
+
+        <div class="flex items-center gap-6">
+          <div class="flex items-center gap-3 pl-6">
+            <!-- Alert badge in header -->
+            <a *ngIf="storage.alertasNoLeidas().length > 0" routerLink="/pendientes-devolucion"
+              class="relative w-9 h-9 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center text-red-500 cursor-pointer hover:bg-red-100 transition-colors">
+              <mat-icon class="scale-90">notifications_active</mat-icon>
+              <span class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center">
+                {{ storage.alertasNoLeidas().length }}
+              </span>
+            </a>
+            <div class="text-right">
+              <p class="text-sm font-bold text-slate-800 leading-none">{{ authService.currentUser()?.first_name }} {{
+                authService.currentUser()?.last_name }}</p>
+              <p class="text-[10px] text-slate-400 font-bold uppercase mt-1">
+                {{ authService.currentUser()?.role }}
+              </p>
+            </div>
+            <img *ngIf="authService.currentUser()?.avatar_url" 
+              [src]="authService.currentUser()?.avatar_url" 
+              [alt]="authService.currentUser()?.first_name"
+              referrerpolicy="no-referrer"
+              class="w-10 h-10 rounded-lg object-cover border border-orange-100 cursor-pointer hover:ring-2 hover:ring-brand/30 transition-all"
+              (click)="authService.logout()" matTooltip="Cerrar sesión">
+            <div *ngIf="!authService.currentUser()?.avatar_url"
+              class="w-10 h-10 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center text-brand cursor-pointer hover:bg-orange-100 transition-colors"
+              (click)="authService.logout()" matTooltip="Cerrar sesión">
+              <mat-icon>logout</mat-icon>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Router Outlet (Común para todos) -->
+      <div class="flex-1 overflow-y-auto" [class.p-8]="authService.currentUser()"
+        [class.lg:p-10]="authService.currentUser()">
+        <div [class.max-w-7xl]="authService.currentUser()" [class.mx-auto]="authService.currentUser()" class="h-full">
+          <router-outlet></router-outlet>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Modal Global Pop-up: Backup Requerido para Configuración -->
+  <div *ngIf="storage.backupRequiredModal().visible" class="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100">
+      <!-- Header -->
+      <div class="p-6 text-white text-center" style="background: linear-gradient(135deg, #d97706, #b45309)">
+        <div class="w-16 h-16 bg-white/20 rounded-2xl rotate-12 flex items-center justify-center mx-auto mb-3 shadow-lg">
+          <mat-icon class="scale-[1.8] -rotate-12">lock_clock</mat-icon>
+        </div>
+        <h3 class="text-xl font-black mb-1">Copia de Seguridad Requerida</h3>
+        <p class="text-amber-100 text-xs font-medium">Configuración protegida por política diaria</p>
+      </div>
+
+      <!-- Body -->
+      <div class="p-6 text-center space-y-3">
+        <p class="text-slate-700 text-sm leading-relaxed font-medium">
+          {{ storage.backupRequiredModal().message }}
+        </p>
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-start gap-2 text-left">
+          <mat-icon class="text-amber-600 flex-shrink-0 scale-75 -mt-0.5">info</mat-icon>
+          <span>Nota: El inventario operativo puede modificarse libremente. Para modificar usuarios, roles o catálogos debe generar el respaldo del día.</span>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="p-6 pt-0 flex gap-3">
+        <button (click)="storage.closeBackupRequiredModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl font-bold transition-all border-none cursor-pointer">
+          Cerrar
+        </button>
+        <button (click)="storage.closeBackupRequiredModal(); router.navigate(['/backups'])" style="background: linear-gradient(135deg, #FF6B00, #E65A00)" class="flex-1 text-white py-3 rounded-xl font-bold transition-all shadow-lg shadow-orange-200 flex items-center justify-center gap-2 border-none cursor-pointer">
+          <mat-icon class="scale-90">backup</mat-icon>
+          Ir a Backups
+        </button>
+      </div>
+    </div>
+  </div>
+
+</ng-container>
+
+<ng-template #loader>
+  <div class="flex h-screen items-center justify-center bg-slate-50">
+    <div class="w-12 h-12 border-4 border-[#FF6B00] border-t-transparent rounded-full animate-spin"></div>
+  </div>
+</ng-template>

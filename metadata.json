@@ -1,0 +1,13 @@
+{
+  "name": "Renting & IT Traceability Manager",
+  "description": "Plataforma integral para la gestión de activos IT, digitalización de actas vía OCR, trazabilidad de ingresos, alistamientos y logística inversa con firmas digitales.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "OCR Asset Indexing",
+    "Digital Signature Biometrics",
+    "Dynamic Technical Checklists",
+    "Reverse Logistics (Ghost Assets)"
+  ]
+}

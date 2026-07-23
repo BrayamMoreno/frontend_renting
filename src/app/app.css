@@ -1,0 +1,85 @@
+@import "tailwindcss";
+@import "./theme.css";
+
+
+body {
+  @apply bg-slate-50 text-[#1A1A1A] antialiased;
+  font-family: 'Inter', system-ui, sans-serif;
+  min-height: 100dvh;
+}
+
+html {
+  min-height: 100dvh;
+}
+
+h1, h2, h3 {
+  @apply block w-full mb-6 leading-tight;
+}
+
+.nav-link {
+  @apply flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-brand hover:bg-orange-50 transition-all duration-200;
+}
+
+.nav-link.active {
+  @apply bg-orange-50 text-brand shadow-sm ring-1 ring-orange-100 font-semibold;
+}
+
+.nav-link mat-icon {
+  @apply text-xl;
+}
+
+.nav-sub-link {
+  @apply flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-slate-400 hover:text-brand hover:bg-orange-50/50 transition-all duration-200;
+}
+
+.nav-sub-link.active-sub {
+  @apply bg-orange-50/70 text-brand font-semibold ring-1 ring-orange-100/50;
+}
+
+.nav-sub-link mat-icon {
+  @apply text-lg;
+}
+
+.card {
+  @apply bg-white rounded-xl border border-slate-200 p-6 shadow-sm mb-6 transition-all;
+}
+
+.card-accent {
+  @apply bg-[#FFF5ED] border-orange-100;
+}
+
+.btn-primary {
+  @apply bg-[#FF6B00] text-white px-5 py-2.5 rounded-[8px] font-semibold text-sm hover:bg-[#E65A00] transition-all active:scale-95 shadow-md shadow-orange-100 disabled:opacity-50 block w-full md:w-auto text-center;
+}
+
+.btn-success {
+  @apply bg-[#FF6B00] text-white px-5 py-2.5 rounded-[8px] font-semibold text-sm hover:bg-[#E65A00] transition-all shadow-md shadow-orange-100;
+}
+
+.btn-secondary {
+  @apply bg-white text-slate-600 border border-slate-200 px-5 py-2.5 rounded-[8px] font-semibold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all;
+}
+
+.technical-panel {
+  @apply bg-slate-800 rounded-xl p-5 shadow-lg text-slate-300 font-mono text-[11px] leading-relaxed mb-6;
+}
+
+.label-mini {
+  @apply text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-2 block w-full;
+}
+
+table th {
+  @apply bg-slate-50 text-[10px] uppercase tracking-widest text-slate-400 font-bold py-4 px-6 border-b border-slate-100;
+}
+
+table td {
+  @apply py-4 px-6 border-b border-slate-50 text-sm;
+}
+
+canvas {
+  @apply border border-dashed border-slate-300 rounded-lg bg-white cursor-crosshair transition-colors hover:border-orange-300;
+}
+
+body.overflow-hidden main > div.overflow-y-auto {
+  overflow-y: hidden !important;
+}
