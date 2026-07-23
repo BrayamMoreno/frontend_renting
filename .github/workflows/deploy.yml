@@ -1,0 +1,30 @@
+name: Deploy via SSH
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ejecutar despliegue en la VPS por SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            # Navegar a la carpeta del proyecto en la VPS
+            cd ~/monorepo/frontend
+            
+            # Limpiar cambios locales si existen y bajar la versión más reciente
+            git reset --hard HEAD
+            git pull origin main
+            
+            # Reconstruir y reiniciar contenedores
+            docker compose down
+            docker compose up -d --build
