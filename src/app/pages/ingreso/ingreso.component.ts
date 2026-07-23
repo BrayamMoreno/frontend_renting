@@ -15,6 +15,7 @@ import { Asset, Recepcion } from '../../models/app-state';
 import { CameraComponent } from '../../components/camera/camera.component';
 import { SignaturePadComponent } from '../../components/signature-pad/signature-pad.component';
 import { ApiService, InventarioItemPayload } from '../../services/api';
+import { generateUUID } from '../../utils/uuid';
 
 @Component({
   selector: 'app-ingreso',
@@ -1948,7 +1949,7 @@ export class IngresoComponent implements OnInit {
     const provId = formData.proveedor ? Number(formData.proveedor) : undefined;
 
     const recepcion: Recepcion = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       fecha: new Date().toISOString(),
       // Si ya encontramos el entregador por cédula, usamos su ID directamente
       entregador_id: this.entregadorEncontrado()?.id ?? undefined,

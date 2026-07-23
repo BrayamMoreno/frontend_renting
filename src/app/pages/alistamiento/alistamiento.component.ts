@@ -9,6 +9,7 @@ import { AuthService, User } from '../../services/auth.service';
 import { CameraComponent } from '../../components/camera/camera.component';
 import { Alistamiento, InventarioItem } from '../../models/app-state';
 import { ActaEntregaComponent, ActaEntregaData } from '../../components/reports/acta-entrega/acta-entrega';
+import { generateUUID } from '../../utils/uuid';
 
 @Component({
   selector: 'app-alistamiento',
@@ -703,7 +704,7 @@ export class AlistamientoComponent implements OnInit, OnDestroy {
     });
 
     const alistamiento: Alistamiento = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       serial: this.selectedAsset()!.serial,
       inventario_item: this.selectedAsset()!._backendId!,
       tecnico: this.authService.currentUser()!.id,

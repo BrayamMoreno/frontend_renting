@@ -6,6 +6,7 @@ import { StorageService } from '../../services/storage';
 import { AuthService } from '../../services/auth.service';
 import { ApiService } from '../../services/api';
 import { ActaEntregaComponent, ActaEntregaData } from '../../components/reports/acta-entrega/acta-entrega';
+import { generateUUID } from '../../utils/uuid';
 
 interface ActivoRow {
   id: string;
@@ -400,7 +401,7 @@ export class ActaEntregaManualComponent implements OnInit {
 
   private emptyRow(): ActivoRow {
     return {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       item: undefined,
       serial: '',
       tipo_producto: '',
@@ -507,7 +508,7 @@ export class ActaEntregaManualComponent implements OnInit {
       return;
     }
 
-    this.activos.update(l => [...l, { ...item, id: crypto.randomUUID() }]);
+    this.activos.update(l => [...l, { ...item, id: generateUUID() }]);
     this.newItem = this.emptyRow();
   }
 
@@ -539,7 +540,7 @@ export class ActaEntregaManualComponent implements OnInit {
       this.activos.update(l => [
         ...l,
         {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           item: match.item,
           serial: match.serial,
           tipo_producto: match.tipo_producto || '',
@@ -563,7 +564,7 @@ export class ActaEntregaManualComponent implements OnInit {
             this.activos.update(l => [
               ...l,
               {
-                id: crypto.randomUUID(),
+                id: generateUUID(),
                 item: p.item,
                 serial: p.serial,
                 tipo_producto: p.tipo_producto || '',
@@ -586,7 +587,7 @@ export class ActaEntregaManualComponent implements OnInit {
       this.activos.update(l => [
         ...l,
         {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           item: isNum ? Number(query) : undefined,
           serial: isNum ? '' : this.searchQuery,
           tipo_producto: '',
