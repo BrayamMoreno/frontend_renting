@@ -1,10 +1,23 @@
 #!/bin/sh
 set -e
 
-ENV_DIR="${ENV_DIR:-/app/browser}"
+# Detectar directorio de archivos estáticos (Nginx o Node serve)
+if [ -d "/usr/share/nginx/html" ]; then
+  ENV_DIR="/usr/share/nginx/html"
+else
+  ENV_DIR="${ENV_DIR:-/app/browser}"
+fi
+
 if [ ! -d "$ENV_DIR" ]; then
   mkdir -p "$ENV_DIR"
 fi
+
+# Garantizar que exista index.html (Angular SSR genera index.csr.html)
+if [ -f "$ENV_DIR/index.csr.html" ] && [ ! -f "$ENV_DIR/index.html" ]; then
+  cp "$ENV_DIR/index.csr.html" "$ENV_DIR/index.html"
+  echo "[docker-entrypoint] Copiado index.csr.html -> index.html para soporte de SPA."
+fi
+
 ENV_FILE="$ENV_DIR/env.js"
 
 API_URL_VAL="${API_URL:-http://localhost:8000/api}"
@@ -24,4 +37,5 @@ EOF
 echo "[docker-entrypoint] env.js actualizado en $ENV_FILE con variables del contenedor."
 
 exec "$@"
+
 
