@@ -23,7 +23,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Copiar estáticos compilados de la SPA de Angular a la carpeta publica de Nginx
 COPY --from=build /app/dist/app/browser /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 3000
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

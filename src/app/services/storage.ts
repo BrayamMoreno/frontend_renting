@@ -40,6 +40,20 @@ export class StorageService {
 
   private stateSignal = signal<AppState>(this.initialState);
 
+  // --- Caché con TTL para evitar re-fetch innecesario al cambiar de módulo ---
+  private _lastInventarioLoad = 0;
+  private _lastRecepcionesLoad = 0;
+  private readonly CACHE_TTL_MS = 30_000; // 30 segundos
+
+  /** Invalida el caché de inventario para forzar recarga en la próxima navegación. */
+  private _invalidateInventarioCache(): void {
+    this._lastInventarioLoad = 0;
+  }
+  /** Invalida el caché de recepciones. */
+  private _invalidateRecepcionesCache(): void {
+    this._lastRecepcionesLoad = 0;
+  }
+
   // Señal de carga de API
   isLoading = signal(false);
   apiError = signal<string | null>(null);
@@ -70,8 +84,14 @@ export class StorageService {
 
   /**
    * Carga el inventario desde el backend y sincroniza el estado local.
+   * @param forceRefresh Si es true, ignora el caché y siempre recarga desde la API.
    */
-  async loadInventarioFromApi(): Promise<void> {
+  async loadInventarioFromApi(forceRefresh = false): Promise<void> {
+    const now = Date.now();
+    // Retornar inmediatamente si los datos son frescos (dentro del TTL) y no se fuerza recarga
+    if (!forceRefresh && this._lastInventarioLoad > 0 && (now - this._lastInventarioLoad) < this.CACHE_TTL_MS) {
+      return;
+    }
     this.isLoading.set(true);
     this.apiError.set(null);
     try {
@@ -111,18 +131,26 @@ export class StorageService {
       });
       const currentState = this.stateSignal();
       this.updateState({ ...currentState, inventario: inventarioMap });
+      this._lastInventarioLoad = Date.now();
     } catch (e: any) {
       console.error('Error cargando inventario desde API:', e);
       this.apiError.set('No se pudo conectar con el servidor.');
     } finally {
       this.isLoading.set(false);
-      await this.loadDevolucionesFromApi();
-      await this.loadAlistamientosFromApi();
-      await this.loadAlertasFromApi();
+      // Cargar datos secundarios en PARALELO (no secuencial) para reducir latencia total
+      await Promise.all([
+        this.loadDevolucionesFromApi(),
+        this.loadAlistamientosFromApi(),
+        this.loadAlertasFromApi(),
+      ]);
     }
   }
 
-  async loadRecepcionesFromApi(): Promise<void> {
+  async loadRecepcionesFromApi(forceRefresh = false): Promise<void> {
+    const now = Date.now();
+    if (!forceRefresh && this._lastRecepcionesLoad > 0 && (now - this._lastRecepcionesLoad) < this.CACHE_TTL_MS) {
+      return;
+    }
     try {
       const raw = await firstValueFrom(this.api.getRecepciones());
       // El backend devuelve campos planos (entregador_foto, entregador_nombre, etc.)
@@ -148,6 +176,7 @@ export class StorageService {
       }));
       const currentState = this.stateSignal();
       this.updateState({ ...currentState, recepciones });
+      this._lastRecepcionesLoad = Date.now();
     } catch (e) {
       console.error('Error cargando recepciones:', e);
     }

@@ -33,12 +33,14 @@ const exampleEnv = parseEnv(envExamplePath);
 // Prioridad: process.env > .env > .env.example
 const apiUrl = process.env.API_URL || fileEnv.API_URL || exampleEnv.API_URL || 'http://localhost:8000/api';
 const googleClientId = process.env.GOOGLE_CLIENT_ID || fileEnv.GOOGLE_CLIENT_ID || exampleEnv.GOOGLE_CLIENT_ID || '';
+const port = process.env.PORT || fileEnv.PORT || exampleEnv.PORT || '3000';
 
 const envJsContent = `// Configuración dinámica del entorno generada automáticamente desde .env
 (function (window) {
   window.__env = window.__env || {};
   window.__env.apiUrl = '${apiUrl.replace(/'/g, "\\'")}';
   window.__env.googleClientId = '${googleClientId.replace(/'/g, "\\'")}';
+  window.__env.port = '${port.replace(/'/g, "\\'")}';
 })(this);
 `;
 
@@ -49,5 +51,6 @@ if (!fs.existsSync(publicDir)) {
 
 fs.writeFileSync(targetPath, envJsContent, 'utf8');
 console.log(`[generate-env] public/env.js actualizado desde .env:`);
+console.log(`  port: ${port}`);
 console.log(`  apiUrl: ${apiUrl}`);
 console.log(`  googleClientId: ${googleClientId}`);

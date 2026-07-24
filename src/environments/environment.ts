@@ -2,6 +2,7 @@ const windowEnv = (typeof window !== 'undefined' && (window as any).__env) ? (wi
 
 export const environment = {
   production: false,
+  port: windowEnv.port || '3000',
   apiUrl: windowEnv.apiUrl || '',
   googleClientId: windowEnv.googleClientId || ''
 };
