@@ -10,20 +10,30 @@ RUN npm ci --legacy-peer-deps
 COPY . .
 RUN npm run build
 
-# Etapa 2: Servidor Nginx de Producción (Production Stage)
-FROM nginx:alpine
+# =================================================================
+# Etapa 2: Servidor estático ligero de Node (SIN Nginx)
+# =================================================================
+FROM node:20-alpine
 
-# Copiar script de inicialización para inyección de entorno
+WORKDIR /app
+
+# Instalar "serve", un paquete oficial y ligero para servir archivos estáticos
+RUN npm install -g serve
+
+# Instalar "gettext" por si tu docker-entrypoint.sh usa el comando "envsubst" para variables
+RUN apk add --no-cache gettext
+
+# Copiar script de inicialización
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-# Copiar configuración de Nginx con proxy inverso al backend
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copiar los archivos estáticos compilados de Angular
+COPY --from=build /app/dist/app/browser ./browser
 
-# Copiar estáticos compilados de la SPA de Angular a la carpeta publica de Nginx
-COPY --from=build /app/dist/app/browser /usr/share/nginx/html
-
+# Ahora SÓLO existirá este puerto
 EXPOSE 3000
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["nginx", "-g", "daemon off;"]
+
+# Levantar la aplicación en el puerto 3000 y en modo SPA (-s para manejar rutas de Angular)
+CMD ["serve", "-s", "browser", "-l", "3000"]

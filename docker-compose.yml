@@ -9,7 +9,7 @@ services:
     container_name: renting_frontend
     restart: always
     ports:
-      - "80:80"
+      - "${PORT:-3000}:3000"
     env_file:
       - .env
     extra_hosts:
