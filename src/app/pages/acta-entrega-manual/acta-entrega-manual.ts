@@ -429,32 +429,27 @@ export class ActaEntregaManualComponent implements OnInit {
   }
 
   ngOnInit() {
-    this.api.getTiposProducto().subscribe(res => {
-      if (res && res.length > 0) this.tiposProducto.set(res.map(r => r.nombre));
-    });
-    this.api.getMarcas().subscribe(res => {
-      if (res && res.length > 0) this.marcas.set(res.map(r => r.nombre));
-    });
-    this.api.getProcesadores().subscribe(res => {
-      if (res && res.length > 0) this.procesadores.set(res.map(r => r.nombre));
-    });
-    this.api.getRam().subscribe(res => {
-      if (res && res.length > 0) this.ramList.set(res.map(r => r.nombre));
-    });
-    this.api.getDiscos().subscribe(res => {
-      if (res && res.length > 0) this.discoList.set(res.map(r => r.nombre));
-    });
-    this.api.getTiposDisco().subscribe(res => {
-      if (res && res.length > 0) this.tiposDisco.set(res.map(r => r.nombre));
-    });
-    this.api.getUbicaciones().subscribe(res => {
-      if (res) {
-        const sorted = res.sort((a, b) => a.path.localeCompare(b.path));
-        this.ubicaciones.set(sorted);
-      }
-    });
+    this.storage.syncAllFromApi().then(() => {
+      const tipos = this.storage.tiposProducto();
+      if (tipos && tipos.length > 0) this.tiposProducto.set(tipos.map((r: any) => r.nombre));
 
-    this.storage.loadInventarioFromApi();
+      const marcas = this.storage.marcas();
+      if (marcas && marcas.length > 0) this.marcas.set(marcas.map((r: any) => r.nombre));
+
+      const procs = this.storage.procesadores();
+      if (procs && procs.length > 0) this.procesadores.set(procs.map((r: any) => r.nombre));
+
+      const rams = this.storage.ram();
+      if (rams && rams.length > 0) this.ramList.set(rams.map((r: any) => r.nombre));
+
+      const discos = this.storage.discos();
+      if (discos && discos.length > 0) this.discoList.set(discos.map((r: any) => r.nombre));
+
+      const tDiscos = this.storage.tiposDisco();
+      if (tDiscos && tDiscos.length > 0) this.tiposDisco.set(tDiscos.map((r: any) => r.nombre));
+
+      this.ubicaciones.set(this.storage.ubicaciones());
+    });
   }
 
   isFormValid(): boolean {

@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, shareReplay } from 'rxjs';
+import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { InventarioItem, Recepcion } from '../models/app-state';
 
@@ -73,23 +73,13 @@ export class ApiService {
   private http = inject(HttpClient);
   private base = environment.apiUrl;
 
-  private cacheMap: Record<string, Observable<any>> = {};
-
-  private getCached<T>(key: string, requestFactory: () => Observable<T>): Observable<T> {
-    if (!this.cacheMap[key]) {
-      this.cacheMap[key] = requestFactory().pipe(
-        shareReplay({ bufferSize: 1, refCount: false })
-      );
-    }
-    return this.cacheMap[key];
+  // ── Bootstrap & Bulk ──────────────────────────────────────────────────────
+  getBootstrapData(): Observable<any> {
+    return this.http.get<any>(`${this.base}/bootstrap/`);
   }
 
-  clearCache(key?: string): void {
-    if (key) {
-      delete this.cacheMap[key];
-    } else {
-      this.cacheMap = {};
-    }
+  getBulkCatalogos(): Observable<any> {
+    return this.http.get<any>(`${this.base}/catalogos/todos/`);
   }
 
   // ── Recepciones ──────────────────────────────────────────────────────────
@@ -103,21 +93,18 @@ export class ApiService {
 
   // ── Proveedores ──────────────────────────────────────────────────────────
   getProveedores(): Observable<ProveedorPayload[]> {
-    return this.getCached('proveedores', () => this.http.get<ProveedorPayload[]>(`${this.base}/proveedores/`));
+    return this.http.get<ProveedorPayload[]>(`${this.base}/proveedores/`);
   }
 
   createProveedor(payload: ProveedorPayload): Observable<ProveedorPayload> {
-    this.clearCache('proveedores');
     return this.http.post<ProveedorPayload>(`${this.base}/proveedores/`, payload);
   }
 
   updateProveedor(id: number, payload: Partial<ProveedorPayload>): Observable<ProveedorPayload> {
-    this.clearCache('proveedores');
     return this.http.patch<ProveedorPayload>(`${this.base}/proveedores/${id}/`, payload);
   }
 
   deleteProveedor(id: number): Observable<void> {
-    this.clearCache('proveedores');
     return this.http.delete<void>(`${this.base}/proveedores/${id}/`);
   }
 
@@ -165,110 +152,91 @@ export class ApiService {
 
   // ── Catálogos (Marcas y Tipos) ──────────────────────────────────────────
   getMarcas(): Observable<any[]> {
-    return this.getCached('marcas', () => this.http.get<any[]>(`${this.base}/marcas/`));
+    return this.http.get<any[]>(`${this.base}/marcas/`);
   }
   createMarca(payload: any): Observable<any> {
-    this.clearCache('marcas');
     return this.http.post<any>(`${this.base}/marcas/`, payload);
   }
   deleteMarca(id: number): Observable<void> {
-    this.clearCache('marcas');
     return this.http.delete<void>(`${this.base}/marcas/${id}/`);
   }
 
   getTiposProducto(): Observable<any[]> {
-    return this.getCached('tiposProducto', () => this.http.get<any[]>(`${this.base}/tipos-producto/`));
+    return this.http.get<any[]>(`${this.base}/tipos-producto/`);
   }
   createTipoProducto(payload: any): Observable<any> {
-    this.clearCache('tiposProducto');
     return this.http.post<any>(`${this.base}/tipos-producto/`, payload);
   }
   deleteTipoProducto(id: number): Observable<void> {
-    this.clearCache('tiposProducto');
     return this.http.delete<void>(`${this.base}/tipos-producto/${id}/`);
   }
   updateTipoProducto(id: number, payload: any): Observable<any> {
-    this.clearCache('tiposProducto');
     return this.http.patch<any>(`${this.base}/tipos-producto/${id}/`, payload);
   }
 
   getTiposDisco(): Observable<any[]> {
-    return this.getCached('tiposDisco', () => this.http.get<any[]>(`${this.base}/tipos-disco/`));
+    return this.http.get<any[]>(`${this.base}/tipos-disco/`);
   }
   createTipoDisco(payload: any): Observable<any> {
-    this.clearCache('tiposDisco');
     return this.http.post<any>(`${this.base}/tipos-disco/`, payload);
   }
   deleteTipoDisco(id: number): Observable<void> {
-    this.clearCache('tiposDisco');
     return this.http.delete<void>(`${this.base}/tipos-disco/${id}/`);
   }
   updateTipoDisco(id: number, payload: any): Observable<any> {
-    this.clearCache('tiposDisco');
     return this.http.patch<any>(`${this.base}/tipos-disco/${id}/`, payload);
   }
 
   getProcesadores(): Observable<any[]> {
-    return this.getCached('procesadores', () => this.http.get<any[]>(`${this.base}/procesadores/`));
+    return this.http.get<any[]>(`${this.base}/procesadores/`);
   }
   createProcesador(payload: any): Observable<any> {
-    this.clearCache('procesadores');
     return this.http.post<any>(`${this.base}/procesadores/`, payload);
   }
   deleteProcesador(id: number): Observable<void> {
-    this.clearCache('procesadores');
     return this.http.delete<void>(`${this.base}/procesadores/${id}/`);
   }
 
   getRam(): Observable<any[]> {
-    return this.getCached('ram', () => this.http.get<any[]>(`${this.base}/ram/`));
+    return this.http.get<any[]>(`${this.base}/ram/`);
   }
   createRam(payload: any): Observable<any> {
-    this.clearCache('ram');
     return this.http.post<any>(`${this.base}/ram/`, payload);
   }
   deleteRam(id: number): Observable<void> {
-    this.clearCache('ram');
     return this.http.delete<void>(`${this.base}/ram/${id}/`);
   }
 
   getDiscos(): Observable<any[]> {
-    return this.getCached('discos', () => this.http.get<any[]>(`${this.base}/discos/`));
+    return this.http.get<any[]>(`${this.base}/discos/`);
   }
   createDisco(payload: any): Observable<any> {
-    this.clearCache('discos');
     return this.http.post<any>(`${this.base}/discos/`, payload);
   }
   deleteDisco(id: number): Observable<void> {
-    this.clearCache('discos');
     return this.http.delete<void>(`${this.base}/discos/${id}/`);
   }
 
   getUbicaciones(): Observable<any[]> {
-    return this.getCached('ubicaciones', () => this.http.get<any[]>(`${this.base}/ubicaciones/`));
+    return this.http.get<any[]>(`${this.base}/ubicaciones/`);
   }
   createUbicacion(payload: any): Observable<any> {
-    this.clearCache('ubicaciones');
     return this.http.post<any>(`${this.base}/ubicaciones/`, payload);
   }
   deleteUbicacion(id: number): Observable<void> {
-    this.clearCache('ubicaciones');
     return this.http.delete<void>(`${this.base}/ubicaciones/${id}/`);
   }
 
   getPuntosAlistamiento(): Observable<any[]> {
-    return this.getCached('puntosAlistamiento', () => this.http.get<any[]>(`${this.base}/puntos-alistamiento/`));
+    return this.http.get<any[]>(`${this.base}/puntos-alistamiento/`);
   }
   createPuntoAlistamiento(payload: any): Observable<any> {
-    this.clearCache('puntosAlistamiento');
     return this.http.post<any>(`${this.base}/puntos-alistamiento/`, payload);
   }
   updatePuntoAlistamiento(id: number, payload: any): Observable<any> {
-    this.clearCache('puntosAlistamiento');
     return this.http.patch<any>(`${this.base}/puntos-alistamiento/${id}/`, payload);
   }
   deletePuntoAlistamiento(id: number): Observable<void> {
-    this.clearCache('puntosAlistamiento');
     return this.http.delete<void>(`${this.base}/puntos-alistamiento/${id}/`);
   }
 
@@ -291,26 +259,23 @@ export class ApiService {
 
   // ── Roles y Permisos ──────────────────────────────────────────────────
   getRoles(): Observable<any[]> {
-    return this.getCached('roles', () => this.http.get<any[]>(`${this.base}/roles/`));
+    return this.http.get<any[]>(`${this.base}/roles/`);
   }
 
   createRol(payload: any): Observable<any> {
-    this.clearCache('roles');
     return this.http.post<any>(`${this.base}/roles/`, payload);
   }
 
   updateRol(id: number, payload: any): Observable<any> {
-    this.clearCache('roles');
     return this.http.patch<any>(`${this.base}/roles/${id}/`, payload);
   }
 
   deleteRol(id: number): Observable<void> {
-    this.clearCache('roles');
     return this.http.delete<void>(`${this.base}/roles/${id}/`);
   }
 
   getPermisos(): Observable<any[]> {
-    return this.getCached('permisos', () => this.http.get<any[]>(`${this.base}/permisos/`));
+    return this.http.get<any[]>(`${this.base}/permisos/`);
   }
 
   getAlistamientos(): Observable<any[]> {
@@ -357,18 +322,15 @@ export class ApiService {
 
   // ── Configuración de Correos de Baja por Categoría ────────────────────────
   getConfiguracionesEmailBaja(): Observable<any[]> {
-    return this.getCached('configuracionesEmailBaja', () => this.http.get<any[]>(`${this.base}/configuraciones-email-baja/`));
+    return this.http.get<any[]>(`${this.base}/configuraciones-email-baja/`);
   }
   createConfiguracionEmailBaja(payload: any): Observable<any> {
-    this.clearCache('configuracionesEmailBaja');
     return this.http.post<any>(`${this.base}/configuraciones-email-baja/`, payload);
   }
   updateConfiguracionEmailBaja(id: number, payload: any): Observable<any> {
-    this.clearCache('configuracionesEmailBaja');
     return this.http.patch<any>(`${this.base}/configuraciones-email-baja/${id}/`, payload);
   }
   deleteConfiguracionEmailBaja(id: number): Observable<void> {
-    this.clearCache('configuracionesEmailBaja');
     return this.http.delete<void>(`${this.base}/configuraciones-email-baja/${id}/`);
   }
 

@@ -40,22 +40,17 @@ export class StorageService {
 
   private stateSignal = signal<AppState>(this.initialState);
 
-  // --- Caché con TTL para evitar re-fetch innecesario al cambiar de módulo ---
-  private _lastInventarioLoad = 0;
-  private _lastRecepcionesLoad = 0;
-  private _lastDevolucionesLoad = 0;
-  private _lastAlistamientosLoad = 0;
-  private _lastAlertasLoad = 0;
-  private readonly CACHE_TTL_MS = 30_000; // 30 segundos
-
-  /** Invalida el caché de inventario para forzar recarga en la próxima navegación. */
-  private _invalidateInventarioCache(): void {
-    this._lastInventarioLoad = 0;
-  }
-  /** Invalida el caché de recepciones. */
-  private _invalidateRecepcionesCache(): void {
-    this._lastRecepcionesLoad = 0;
-  }
+  // Señales de catálogos compartidos (almacenados centralizadamente para reducir peticiones)
+  marcas = signal<any[]>([]);
+  tiposProducto = signal<any[]>([]);
+  tiposDisco = signal<any[]>([]);
+  procesadores = signal<any[]>([]);
+  ram = signal<any[]>([]);
+  discos = signal<any[]>([]);
+  ubicaciones = signal<any[]>([]);
+  puntosAlistamiento = signal<any[]>([]);
+  proveedores = signal<any[]>([]);
+  configuracionesEmail = signal<any[]>([]);
 
   // Señal de carga de API
   isLoading = signal(false);
@@ -86,21 +81,17 @@ export class StorageService {
   alertasNoLeidas = computed(() => this.stateSignal().alertas.filter(a => !a.leida));
 
   /**
-   * Carga el inventario desde el backend y sincroniza el estado local.
-   * @param forceRefresh Si es true, ignora el caché y siempre recarga desde la API.
+   * Sincroniza TODO el estado de la aplicación en 1 sola solicitud HTTP unificada (GET /api/bootstrap/).
    */
-  async loadInventarioFromApi(forceRefresh = false): Promise<void> {
-    const now = Date.now();
-    // Retornar inmediatamente si los datos son frescos (dentro del TTL) y no se fuerza recarga
-    if (!forceRefresh && this._lastInventarioLoad > 0 && (now - this._lastInventarioLoad) < this.CACHE_TTL_MS) {
-      return;
-    }
+  async syncAllFromApi(): Promise<void> {
     this.isLoading.set(true);
     this.apiError.set(null);
     try {
-      const items = await firstValueFrom(this.api.getInventario());
+      const data = await firstValueFrom(this.api.getBootstrapData());
+
+      // 1. Inventario
       const inventarioMap: Record<string, InventarioItem> = {};
-      items.forEach((item: any) => {
+      (data.inventario || []).forEach((item: any) => {
         inventarioMap[item.serial] = {
           item: item.item,
           tipo_producto: item.tipo_producto,
@@ -128,36 +119,99 @@ export class StorageService {
           responsable_devolucion: item.responsable_devolucion,
           es_propio: item.es_propio,
           equipo_asociado: item.equipo_asociado,
-          _backendId: item.id,  // guardamos el id para updates
+          _backendId: item.id,
           creado_automaticamente: item.creado_automaticamente ?? false
         };
       });
+
+      // 2. Recepciones
+      const recepciones: Recepcion[] = (data.recepciones || []).map((r: any) => ({
+        id: r.id.toString(),
+        fecha: r.fecha,
+        proveedor: r.proveedor,
+        proveedor_nombre: r.proveedor_nombre,
+        entregador: {
+          nombre: r.entregador_nombre ?? '',
+          cedula: r.entregador_cedula ?? '',
+          empresa: r.entregador_empresa ?? '',
+          foto: r.entregador_foto ?? undefined,
+          firma: r.entregador_firma ?? undefined,
+        },
+        receptor: {
+          nombre: r.receptor_nombre ?? '',
+          foto: r.receptor_foto ?? undefined,
+          firma: r.receptor_firma ?? undefined,
+        },
+        equipos: r.equipos ?? [],
+      }));
+
+      // 3. Actualizar señal principal del estado
       const currentState = this.stateSignal();
-      this.updateState({ ...currentState, inventario: inventarioMap });
-      this._lastInventarioLoad = Date.now();
+      this.updateState({
+        ...currentState,
+        inventario: inventarioMap,
+        recepciones,
+        devoluciones: data.devoluciones || [],
+        alistamientos: data.alistamientos || [],
+        alertas: data.alertas || []
+      });
+
+      // 4. Actualizar señales de catálogos
+      if (data.catalogos) {
+        this._updateCatalogSignals(data.catalogos);
+      }
     } catch (e: any) {
-      console.error('Error cargando inventario desde API:', e);
+      console.error('Error sincronizando todo desde API:', e);
       this.apiError.set('No se pudo conectar con el servidor.');
     } finally {
       this.isLoading.set(false);
-      // Cargar datos secundarios en PARALELO (no secuencial) para reducir latencia total
-      await Promise.all([
-        this.loadDevolucionesFromApi(),
-        this.loadAlistamientosFromApi(),
-        this.loadAlertasFromApi(),
-      ]);
     }
   }
 
-  async loadRecepcionesFromApi(forceRefresh = false): Promise<void> {
-    const now = Date.now();
-    if (!forceRefresh && this._lastRecepcionesLoad > 0 && (now - this._lastRecepcionesLoad) < this.CACHE_TTL_MS) {
-      return;
+  /**
+   * Recarga unificada únicamente de catálogos en 1 sola solicitud HTTP (GET /api/catalogos/todos/).
+   */
+  async loadCatalogosFromApi(): Promise<void> {
+    try {
+      const res = await firstValueFrom(this.api.getBulkCatalogos());
+      this._updateCatalogSignals(res);
+    } catch (e) {
+      console.error('Error cargando catálogos unificados:', e);
     }
+  }
+
+  private _updateCatalogSignals(cat: any) {
+    if (cat.marcas) this.marcas.set(cat.marcas);
+    if (cat.tipos_producto) this.tiposProducto.set(cat.tipos_producto);
+    if (cat.tipos_disco) this.tiposDisco.set(cat.tipos_disco);
+    if (cat.procesadores) this.procesadores.set(cat.procesadores);
+    if (cat.ram) this.ram.set(cat.ram);
+    if (cat.discos) this.discos.set(cat.discos);
+    if (cat.ubicaciones) {
+      const sorted = [...cat.ubicaciones].sort((a, b) => (a.path || '').localeCompare(b.path || ''));
+      this.ubicaciones.set(sorted);
+    }
+    if (cat.puntos_alistamiento) {
+      const sorted = [...cat.puntos_alistamiento].sort((a, b) => (a.orden || 0) - (b.orden || 0));
+      this.puntosAlistamiento.set(sorted);
+    }
+    if (cat.proveedores) {
+      const sorted = [...cat.proveedores].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+      this.proveedores.set(sorted);
+    }
+    if (cat.configuraciones_email) this.configuracionesEmail.set(cat.configuraciones_email);
+  }
+
+  /**
+   * Carga el inventario desde el backend (utiliza el sync unificado para no hacer peticiones adicionales).
+   */
+  async loadInventarioFromApi(forceRefresh = false): Promise<void> {
+    return this.syncAllFromApi();
+  }
+
+  async loadRecepcionesFromApi(forceRefresh = false): Promise<void> {
     try {
       const raw = await firstValueFrom(this.api.getRecepciones());
-      // El backend devuelve campos planos (entregador_foto, entregador_nombre, etc.)
-      // Los mapeamos al formato anidado que usa el frontend (rec.entregador.foto, etc.)
       const recepciones: Recepcion[] = raw.map((r: any) => ({
         id: r.id.toString(),
         fecha: r.fecha,
@@ -179,52 +233,36 @@ export class StorageService {
       }));
       const currentState = this.stateSignal();
       this.updateState({ ...currentState, recepciones });
-      this._lastRecepcionesLoad = Date.now();
     } catch (e) {
       console.error('Error cargando recepciones:', e);
     }
   }
 
   async loadDevolucionesFromApi(forceRefresh = false): Promise<void> {
-    const now = Date.now();
-    if (!forceRefresh && this._lastDevolucionesLoad > 0 && (now - this._lastDevolucionesLoad) < this.CACHE_TTL_MS) {
-      return;
-    }
     try {
       const devoluciones = await firstValueFrom(this.api.getDevoluciones());
       const currentState = this.stateSignal();
       this.updateState({ ...currentState, devoluciones });
-      this._lastDevolucionesLoad = Date.now();
     } catch (e) {
       console.error('Error cargando devoluciones:', e);
     }
   }
 
   async loadAlistamientosFromApi(forceRefresh = false): Promise<void> {
-    const now = Date.now();
-    if (!forceRefresh && this._lastAlistamientosLoad > 0 && (now - this._lastAlistamientosLoad) < this.CACHE_TTL_MS) {
-      return;
-    }
     try {
       const alistamientos = await firstValueFrom(this.api.getAlistamientos());
       const currentState = this.stateSignal();
       this.updateState({ ...currentState, alistamientos });
-      this._lastAlistamientosLoad = Date.now();
     } catch (e) {
       console.error('Error cargando alistamientos:', e);
     }
   }
 
   async loadAlertasFromApi(forceRefresh = false): Promise<void> {
-    const now = Date.now();
-    if (!forceRefresh && this._lastAlertasLoad > 0 && (now - this._lastAlertasLoad) < this.CACHE_TTL_MS) {
-      return;
-    }
     try {
       const alertas = await firstValueFrom(this.api.getAlertas());
       const currentState = this.stateSignal();
       this.updateState({ ...currentState, alertas });
-      this._lastAlertasLoad = Date.now();
     } catch (e) {
       console.error('Error cargando alertas:', e);
     }

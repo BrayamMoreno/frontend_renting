@@ -1068,43 +1068,36 @@ export class IngresoComponent implements OnInit {
   ubicaciones = signal<any[]>([]);
 
   ngOnInit() {
-    this.api.getTiposProducto().subscribe(res => {
-      if (res && res.length > 0) {
-        this.tiposProductoFull.set(res);
-        this.tiposProductoEquipo.set(res.filter((r: any) => !r.es_periferico).map((r: any) => r.nombre));
-        this.tiposProductoPeriferico.set(res.filter((r: any) => r.es_periferico).map((r: any) => r.nombre));
-      }
+    this.storage.syncAllFromApi().then(() => {
+      this.cargarProveedores();
     });
-    this.api.getTiposDisco().subscribe(res => {
-      if (res && res.length > 0) this.tiposDisco.set(res.map(r => r.nombre));
-    });
-    this.api.getMarcas().subscribe(res => {
-      if (res && res.length > 0) this.marcas.set(res.map(r => r.nombre));
-    });
-    this.api.getUbicaciones().subscribe(res => {
-      if (res) {
-        const sorted = res.sort((a, b) => a.path.localeCompare(b.path));
-        this.ubicaciones.set(sorted);
-      }
-    });
-    this.api.getProcesadores().subscribe(res => {
-      if (res && res.length > 0) this.procesadores.set(res.map(r => r.nombre));
-    });
-    this.api.getRam().subscribe(res => {
-      if (res && res.length > 0) this.ramList.set(res.map(r => r.nombre));
-    });
-    this.api.getDiscos().subscribe(res => {
-      if (res && res.length > 0) this.discoList.set(res.map(r => r.nombre));
-    });
-    this.storage.loadRecepcionesFromApi();
-    this.storage.loadInventarioFromApi();
-    this.cargarProveedores();
   }
 
   cargarProveedores() {
-    this.api.getProveedores().subscribe(res => {
-      this.proveedores.set(res);
-    });
+    const tipos = this.storage.tiposProducto();
+    if (tipos && tipos.length > 0) {
+      this.tiposProductoFull.set(tipos);
+      this.tiposProductoEquipo.set(tipos.filter((r: any) => !r.es_periferico).map((r: any) => r.nombre));
+      this.tiposProductoPeriferico.set(tipos.filter((r: any) => r.es_periferico).map((r: any) => r.nombre));
+    }
+    const tDiscos = this.storage.tiposDisco();
+    if (tDiscos && tDiscos.length > 0) this.tiposDisco.set(tDiscos.map((r: any) => r.nombre));
+
+    const marcas = this.storage.marcas();
+    if (marcas && marcas.length > 0) this.marcas.set(marcas.map((r: any) => r.nombre));
+
+    this.ubicaciones.set(this.storage.ubicaciones());
+
+    const procs = this.storage.procesadores();
+    if (procs && procs.length > 0) this.procesadores.set(procs.map((r: any) => r.nombre));
+
+    const rams = this.storage.ram();
+    if (rams && rams.length > 0) this.ramList.set(rams.map((r: any) => r.nombre));
+
+    const discos = this.storage.discos();
+    if (discos && discos.length > 0) this.discoList.set(discos.map((r: any) => r.nombre));
+
+    this.proveedores.set(this.storage.proveedores());
   }
 
   abrirModalCrearProveedor() {

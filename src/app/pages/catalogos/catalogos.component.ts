@@ -521,25 +521,27 @@ export class CatalogosComponent implements OnInit {
   }
 
   loadCatalogos() {
-    this.api.getMarcas().subscribe(res => this.marcas.set(res));
-    this.api.getTiposProducto().subscribe(res => this.tipos.set(res));
-    this.api.getTiposDisco().subscribe(res => this.tiposDisco.set(res));
-    this.api.getProcesadores().subscribe(res => this.procesadores.set(res));
-    this.api.getRam().subscribe(res => this.rams.set(res));
-    this.api.getDiscos().subscribe(res => this.discos.set(res));
-    this.api.getUbicaciones().subscribe(res => {
-      const sorted = res.sort((a, b) => a.path.localeCompare(b.path));
-      this.ubicaciones.set(sorted);
+    this.api.getBulkCatalogos().subscribe(res => {
+      if (res.marcas) this.marcas.set(res.marcas);
+      if (res.tipos_producto) this.tipos.set(res.tipos_producto);
+      if (res.tipos_disco) this.tiposDisco.set(res.tipos_disco);
+      if (res.procesadores) this.procesadores.set(res.procesadores);
+      if (res.ram) this.rams.set(res.ram);
+      if (res.discos) this.discos.set(res.discos);
+      if (res.ubicaciones) {
+        const sorted = res.ubicaciones.sort((a: any, b: any) => (a.path || '').localeCompare(b.path || ''));
+        this.ubicaciones.set(sorted);
+      }
+      if (res.puntos_alistamiento) {
+        const sorted = res.puntos_alistamiento.sort((a: any, b: any) => (a.orden || 0) - (b.orden || 0));
+        this.puntosAlistamiento.set(sorted);
+      }
+      if (res.proveedores) {
+        const sorted = res.proveedores.sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || ''));
+        this.proveedores.set(sorted);
+      }
+      if (res.configuraciones_email) this.configuracionesEmail.set(res.configuraciones_email);
     });
-    this.api.getPuntosAlistamiento().subscribe(res => {
-      const sorted = res.sort((a, b) => (a.orden || 0) - (b.orden || 0));
-      this.puntosAlistamiento.set(sorted);
-    });
-    this.api.getProveedores().subscribe(res => {
-      const sorted = res.sort((a, b) => a.nombre.localeCompare(b.nombre));
-      this.proveedores.set(sorted);
-    });
-    this.api.getConfiguracionesEmailBaja().subscribe(res => this.configuracionesEmail.set(res));
   }
 
   addMarca() {

@@ -524,17 +524,15 @@ export class AlistamientoComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.isLoading.set(true);
-    this.api.getTiposProducto().subscribe(res => this.tiposProducto.set(res));
-    this.api.getPuntosAlistamiento().subscribe(res => {
-      const sorted = res.sort((a: any, b: any) => (a.orden || 0) - (b.orden || 0));
-      this.activePuntos.set(sorted.filter((p: any) => p.activo));
-    });
     this.authService.getUsers().subscribe(users => {
       this.tecnicos.set(users);
-      this.isLoading.set(false);
     });
-    this.storage.loadInventarioFromApi().then(() => {
+    this.storage.syncAllFromApi().then(() => {
+      this.tiposProducto.set(this.storage.tiposProducto());
+      const puntos = this.storage.puntosAlistamiento();
+      this.activePuntos.set(puntos.filter((p: any) => p.activo));
       this.initDrafts();
+      this.isLoading.set(false);
     });
 
     this.timerInterval = setInterval(() => {

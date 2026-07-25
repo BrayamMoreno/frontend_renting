@@ -1374,38 +1374,26 @@ export class InventarioComponent implements OnInit {
       this.ubicacionFilter.set(ubicacionParam);
     }
 
-    this.storage.loadInventarioFromApi();
-    this.storage.loadRecepcionesFromApi();
-    this.storage.loadDevolucionesFromApi();
-    this.storage.loadAlistamientosFromApi();
-    this.api.getUbicaciones().subscribe({
-      next: (res) => {
-        const sorted = res.sort((a, b) => a.path.localeCompare(b.path));
-        this.ubicaciones.set(sorted);
-      },
-      error: (err) => console.error('Error cargando ubicaciones:', err)
-    });
-    this.api.getTiposProducto().subscribe({
-      next: (res) => {
-        this.tiposProductoFull.set(res);
-        this.catalogTypes.set(res.map(t => t.nombre).sort());
-      },
-      error: (err) => console.error('Error cargando tipos:', err)
-    });
-    this.api.getMarcas().subscribe({
-      next: (res) => { if (res && res.length > 0) this.marcas.set(res.map(r => r.nombre)); }
-    });
-    this.api.getTiposDisco().subscribe({
-      next: (res) => { if (res && res.length > 0) this.tiposDisco.set(res.map(r => r.nombre)); }
-    });
-    this.api.getProcesadores().subscribe({
-      next: (res) => { if (res && res.length > 0) this.procesadores.set(res.map(r => r.nombre)); }
-    });
-    this.api.getRam().subscribe({
-      next: (res) => { if (res && res.length > 0) this.ramList.set(res.map(r => r.nombre)); }
-    });
-    this.api.getDiscos().subscribe({
-      next: (res) => { if (res && res.length > 0) this.discoList.set(res.map(r => r.nombre)); }
+    this.storage.syncAllFromApi().then(() => {
+      this.ubicaciones.set(this.storage.ubicaciones());
+      const tipos = this.storage.tiposProducto();
+      this.tiposProductoFull.set(tipos);
+      this.catalogTypes.set(tipos.map((t: any) => t.nombre).sort());
+
+      const marcas = this.storage.marcas();
+      if (marcas && marcas.length > 0) this.marcas.set(marcas.map((r: any) => r.nombre));
+
+      const tDiscos = this.storage.tiposDisco();
+      if (tDiscos && tDiscos.length > 0) this.tiposDisco.set(tDiscos.map((r: any) => r.nombre));
+
+      const procs = this.storage.procesadores();
+      if (procs && procs.length > 0) this.procesadores.set(procs.map((r: any) => r.nombre));
+
+      const rams = this.storage.ram();
+      if (rams && rams.length > 0) this.ramList.set(rams.map((r: any) => r.nombre));
+
+      const discos = this.storage.discos();
+      if (discos && discos.length > 0) this.discoList.set(discos.map((r: any) => r.nombre));
     });
   }
 

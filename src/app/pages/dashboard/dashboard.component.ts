@@ -365,10 +365,7 @@ export class DashboardComponent implements OnInit {
   };
 
   ngOnInit() {
-    this.storage.loadInventarioFromApi();
-    this.storage.loadRecepcionesFromApi();
-    // devoluciones usually loaded internally by loadInventarioFromApi but we ensure it's loaded if needed
-    this.storage.loadDevolucionesFromApi();
+    this.storage.syncAllFromApi();
   }
 
   // KPIs
