@@ -3,7 +3,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { tap, catchError, switchMap } from 'rxjs/operators';
-import { of, firstValueFrom } from 'rxjs';
+import { of, firstValueFrom, Observable, shareReplay } from 'rxjs';
 import { environment } from '../../environments/environment';
 
 export interface User {
@@ -154,23 +154,38 @@ export class AuthService {
     return this.http.post<any>(`${this.base}/change-password/`, passwords);
   }
 
-  getUsers() {
-    return this.http.get<User[]>(`${this.base}/users/`);
+  private usersCache$: Observable<User[]> | null = null;
+
+  getUsers(): Observable<User[]> {
+    if (!this.usersCache$) {
+      this.usersCache$ = this.http.get<User[]>(`${this.base}/users/`).pipe(
+        shareReplay({ bufferSize: 1, refCount: false })
+      );
+    }
+    return this.usersCache$;
+  }
+
+  clearUsersCache() {
+    this.usersCache$ = null;
   }
 
   createUser(userData: any) {
+    this.clearUsersCache();
     return this.http.post<User>(`${this.base}/users/create/`, userData);
   }
 
   updateUser(id: number, userData: any) {
+    this.clearUsersCache();
     return this.http.patch<User>(`${this.base}/users/${id}/`, userData);
   }
 
   deleteUser(id: number) {
+    this.clearUsersCache();
     return this.http.delete(`${this.base}/users/${id}/`);
   }
 
   approveUser(id: number) {
+    this.clearUsersCache();
     return this.http.patch<User>(`${this.base}/users/${id}/approve/`, {});
   }
 

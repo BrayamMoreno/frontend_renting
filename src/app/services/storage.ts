@@ -43,6 +43,9 @@ export class StorageService {
   // --- Caché con TTL para evitar re-fetch innecesario al cambiar de módulo ---
   private _lastInventarioLoad = 0;
   private _lastRecepcionesLoad = 0;
+  private _lastDevolucionesLoad = 0;
+  private _lastAlistamientosLoad = 0;
+  private _lastAlertasLoad = 0;
   private readonly CACHE_TTL_MS = 30_000; // 30 segundos
 
   /** Invalida el caché de inventario para forzar recarga en la próxima navegación. */
@@ -182,31 +185,46 @@ export class StorageService {
     }
   }
 
-  async loadDevolucionesFromApi(): Promise<void> {
+  async loadDevolucionesFromApi(forceRefresh = false): Promise<void> {
+    const now = Date.now();
+    if (!forceRefresh && this._lastDevolucionesLoad > 0 && (now - this._lastDevolucionesLoad) < this.CACHE_TTL_MS) {
+      return;
+    }
     try {
       const devoluciones = await firstValueFrom(this.api.getDevoluciones());
       const currentState = this.stateSignal();
       this.updateState({ ...currentState, devoluciones });
+      this._lastDevolucionesLoad = Date.now();
     } catch (e) {
       console.error('Error cargando devoluciones:', e);
     }
   }
 
-  async loadAlistamientosFromApi(): Promise<void> {
+  async loadAlistamientosFromApi(forceRefresh = false): Promise<void> {
+    const now = Date.now();
+    if (!forceRefresh && this._lastAlistamientosLoad > 0 && (now - this._lastAlistamientosLoad) < this.CACHE_TTL_MS) {
+      return;
+    }
     try {
       const alistamientos = await firstValueFrom(this.api.getAlistamientos());
       const currentState = this.stateSignal();
       this.updateState({ ...currentState, alistamientos });
+      this._lastAlistamientosLoad = Date.now();
     } catch (e) {
       console.error('Error cargando alistamientos:', e);
     }
   }
 
-  async loadAlertasFromApi(): Promise<void> {
+  async loadAlertasFromApi(forceRefresh = false): Promise<void> {
+    const now = Date.now();
+    if (!forceRefresh && this._lastAlertasLoad > 0 && (now - this._lastAlertasLoad) < this.CACHE_TTL_MS) {
+      return;
+    }
     try {
       const alertas = await firstValueFrom(this.api.getAlertas());
       const currentState = this.stateSignal();
       this.updateState({ ...currentState, alertas });
+      this._lastAlertasLoad = Date.now();
     } catch (e) {
       console.error('Error cargando alertas:', e);
     }
@@ -214,12 +232,12 @@ export class StorageService {
 
   async marcarAlertaLeida(id: number): Promise<void> {
     await firstValueFrom(this.api.marcarAlertaLeida(id));
-    await this.loadAlertasFromApi();
+    await this.loadAlertasFromApi(true);
   }
 
   async marcarTodasAlertsLeidas(): Promise<void> {
     await firstValueFrom(this.api.marcarTodasAlertsLeidas());
-    await this.loadAlertasFromApi();
+    await this.loadAlertasFromApi(true);
   }
 
   /**
@@ -823,8 +841,8 @@ export class StorageService {
       // pero para asegurar consistencia si no hay signals/triggers, lo hacemos aquí o recargamos.
       // En este caso, recargaremos todo.
       
-      await this.loadInventarioFromApi();
-      await this.loadDevolucionesFromApi();
+      await this.loadInventarioFromApi(true);
+      await this.loadDevolucionesFromApi(true);
     } catch (e) {
       console.error('Error confirmando devolución:', e);
       throw e;

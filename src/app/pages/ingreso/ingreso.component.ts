@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators, FormGroup, FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -93,7 +93,7 @@ import { generateUUID } from '../../utils/uuid';
             </div>
           </div>
 
-          <div class="flex-1 p-8 overflow-y-auto bg-slate-50/50">
+          <div #scrollContainer class="flex-1 p-8 overflow-y-auto bg-slate-50/50">
             <!-- Reuse existing step logic but with refined UI inside this panel -->
             
             <!-- Step 1: Form Inline -->
@@ -257,7 +257,20 @@ import { generateUUID } from '../../utils/uuid';
                             <p class="font-bold text-slate-800">{{ asset.marca }} {{ asset.modelo }}</p>
                             <p class="text-[10px] text-slate-500 font-mono">Serial: {{ asset.serial }} | Item: {{ asset.item }}</p>
                           </div>
-                          <span class="text-[10px] bg-slate-100 text-slate-600 px-1 rounded">{{ asset.tipo_producto }}</span>
+                          <div class="flex items-center gap-1.5">
+                            <span *ngIf="asset.estado" class="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                                  [class.bg-emerald-100]="asset.estado === 'DISPONIBLE'"
+                                  [class.text-emerald-700]="asset.estado === 'DISPONIBLE'"
+                                  [class.bg-blue-100]="asset.estado === 'ENTREGADO'"
+                                  [class.text-blue-700]="asset.estado === 'ENTREGADO'"
+                                  [class.bg-amber-100]="asset.estado === 'ALISTAMIENTO' || asset.estado === 'RECIBIDO'"
+                                  [class.text-amber-700]="asset.estado === 'ALISTAMIENTO' || asset.estado === 'RECIBIDO'"
+                                  [class.bg-slate-100]="asset.estado !== 'DISPONIBLE' && asset.estado !== 'ENTREGADO' && asset.estado !== 'ALISTAMIENTO' && asset.estado !== 'RECIBIDO'"
+                                  [class.text-slate-600]="asset.estado !== 'DISPONIBLE' && asset.estado !== 'ENTREGADO' && asset.estado !== 'ALISTAMIENTO' && asset.estado !== 'RECIBIDO'">
+                              {{ asset.estado }}
+                            </span>
+                            <span class="text-[10px] bg-slate-100 text-slate-600 px-1 rounded">{{ asset.tipo_producto }}</span>
+                          </div>
                         </div>
                       </div>
                       <div *ngIf="showCambioPorDropdown() && filteredCambioAssets().length === 0" 
@@ -406,7 +419,20 @@ import { generateUUID } from '../../utils/uuid';
                             <p class="font-bold text-slate-800">{{ asset.marca }} {{ asset.modelo }}</p>
                             <p class="text-[10px] text-slate-500 font-mono">Serial: {{ asset.serial }} | Item: {{ asset.item }}</p>
                           </div>
-                          <span class="text-[10px] bg-slate-100 text-slate-600 px-1 rounded">{{ asset.tipo_producto }}</span>
+                          <div class="flex items-center gap-1.5">
+                            <span *ngIf="asset.estado" class="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                                  [class.bg-emerald-100]="asset.estado === 'DISPONIBLE'"
+                                  [class.text-emerald-700]="asset.estado === 'DISPONIBLE'"
+                                  [class.bg-blue-100]="asset.estado === 'ENTREGADO'"
+                                  [class.text-blue-700]="asset.estado === 'ENTREGADO'"
+                                  [class.bg-amber-100]="asset.estado === 'ALISTAMIENTO' || asset.estado === 'RECIBIDO'"
+                                  [class.text-amber-700]="asset.estado === 'ALISTAMIENTO' || asset.estado === 'RECIBIDO'"
+                                  [class.bg-slate-100]="asset.estado !== 'DISPONIBLE' && asset.estado !== 'ENTREGADO' && asset.estado !== 'ALISTAMIENTO' && asset.estado !== 'RECIBIDO'"
+                                  [class.text-slate-600]="asset.estado !== 'DISPONIBLE' && asset.estado !== 'ENTREGADO' && asset.estado !== 'ALISTAMIENTO' && asset.estado !== 'RECIBIDO'">
+                              {{ asset.estado }}
+                            </span>
+                            <span class="text-[10px] bg-slate-100 text-slate-600 px-1 rounded">{{ asset.tipo_producto }}</span>
+                          </div>
                         </div>
                       </div>
                       <div *ngIf="showCambioPorPeriphDropdown() && filteredCambioPeriphAssets().length === 0"
@@ -796,6 +822,7 @@ import { generateUUID } from '../../utils/uuid';
   `
 })
 export class IngresoComponent implements OnInit {
+  @ViewChild('scrollContainer') scrollContainer?: ElementRef<HTMLDivElement>;
   private fb = inject(FormBuilder);
   private storage = inject(StorageService);
   private ocr = inject(OcrService);
@@ -845,9 +872,10 @@ export class IngresoComponent implements OnInit {
   filteredCambioAssets = computed(() => {
     const query = this.searchCambioQuery().toLowerCase().trim();
     const tiposFull = this.tiposProductoFull();
-    // Solo mostrar ítems cuyos tipo_producto NO sean periféricos
+    const excludedStates = ['DADO_DE_BAJA', 'DEVUELTO', 'PENDIENTE_DEVOLUCION', 'EN_ESPERA_DEVOLUCION'];
+    // Mostrar equipos (no periféricos) que no estén dados de baja ni devueltos
     const assets = this.storage.inventario().filter(a => {
-      if (a.estado !== 'ENTREGADO') return false;
+      if (a.estado && excludedStates.includes(a.estado.toUpperCase())) return false;
       const prodType = a.tipo_producto;
       if (!prodType) return false;
       const tipoObj = tiposFull.find(t => t.nombre.toUpperCase() === prodType.toUpperCase());
@@ -859,17 +887,19 @@ export class IngresoComponent implements OnInit {
       (a.item?.toString().includes(query)) ||
       (a.marca?.toLowerCase().includes(query)) ||
       (a.modelo?.toLowerCase().includes(query)) ||
-      (a.tipo_producto?.toLowerCase().includes(query))
+      (a.tipo_producto?.toLowerCase().includes(query)) ||
+      (a.estado?.toLowerCase().includes(query))
     ).slice(0, 30);
   });
 
-  /** Solo ítems periéricos ENTREGADOS — para el campo de cambio del formulario de periféricos */
+  /** Ítems periféricos que no estén dados de baja ni devueltos — para el campo de cambio del formulario de periféricos */
   filteredCambioPeriphAssets = computed(() => {
     const query = this.searchCambioPeriphQuery().toLowerCase().trim();
     const tiposFull = this.tiposProductoFull();
-    // Solo mostrar ítems cuyos tipo_producto SÍ sean periféricos
+    const excludedStates = ['DADO_DE_BAJA', 'DEVUELTO', 'PENDIENTE_DEVOLUCION', 'EN_ESPERA_DEVOLUCION'];
+    // Mostrar periféricos que no estén dados de baja ni devueltos
     const assets = this.storage.inventario().filter(a => {
-      if (a.estado !== 'ENTREGADO') return false;
+      if (a.estado && excludedStates.includes(a.estado.toUpperCase())) return false;
       const prodType = a.tipo_producto;
       if (!prodType) return false;
       const tipoObj = tiposFull.find(t => t.nombre.toUpperCase() === prodType.toUpperCase());
@@ -881,7 +911,8 @@ export class IngresoComponent implements OnInit {
       (a.item?.toString().includes(query)) ||
       (a.marca?.toLowerCase().includes(query)) ||
       (a.modelo?.toLowerCase().includes(query)) ||
-      (a.tipo_producto?.toLowerCase().includes(query))
+      (a.tipo_producto?.toLowerCase().includes(query)) ||
+      (a.estado?.toLowerCase().includes(query))
     ).slice(0, 30);
   });
 
@@ -1118,6 +1149,8 @@ export class IngresoComponent implements OnInit {
     proveedor: ['', Validators.required]
   });
 
+  private cedulaDebounceTimeout: any = null;
+
   onCedulaInput(event: any) {
     const input = event.target as HTMLInputElement;
     // Remove non-numeric characters
@@ -1126,28 +1159,34 @@ export class IngresoComponent implements OnInit {
     this.entregadorForm.patchValue({ cedula: cedulaValue }, { emitEvent: false });
     this.entregadorEncontrado.set(null);
 
-    // Autocomplete: si hay ≥5 dígitos buscar en el endpoint de entregadores
-    if (cedulaValue.length >= 5) {
-      this.api.getEntregadorByCedula(cedulaValue).subscribe({
-        next: (response: any) => {
-          const results = Array.isArray(response) ? response : response.results;
-          if (results && results.length > 0) {
-            const found = results[0] as any;
-            this.entregadorEncontrado.set(found);
-            
-            // Handle if provider is nested object or primitive
-            const provId = typeof found.proveedor === 'object' && found.proveedor !== null 
-              ? found.proveedor.id 
-              : found.proveedor;
+    if (this.cedulaDebounceTimeout) {
+      clearTimeout(this.cedulaDebounceTimeout);
+    }
 
-            this.entregadorForm.patchValue({
-              nombre: found.nombre,
-              proveedor: provId != null ? String(provId) : ''
-            });
-          }
-        },
-        error: () => { /* Silencioso: no bloquear si falla */ }
-      });
+    // Autocomplete: si hay ≥5 dígitos buscar en el endpoint de entregadores (debounced)
+    if (cedulaValue.length >= 5) {
+      this.cedulaDebounceTimeout = setTimeout(() => {
+        this.api.getEntregadorByCedula(cedulaValue).subscribe({
+          next: (response: any) => {
+            const results = Array.isArray(response) ? response : response.results;
+            if (results && results.length > 0) {
+              const found = results[0] as any;
+              this.entregadorEncontrado.set(found);
+              
+              // Handle if provider is nested object or primitive
+              const provId = typeof found.proveedor === 'object' && found.proveedor !== null 
+                ? found.proveedor.id 
+                : found.proveedor;
+
+              this.entregadorForm.patchValue({
+                nombre: found.nombre,
+                proveedor: provId != null ? String(provId) : ''
+              });
+            }
+          },
+          error: () => { /* Silencioso: no bloquear si falla */ }
+        });
+      }, 300);
     }
   }
 
@@ -1208,14 +1247,30 @@ export class IngresoComponent implements OnInit {
       comentarios: '',
       equipo_asociado: undefined
     };
+    this.scrollToTop();
+  }
+
+  scrollToTop() {
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (this.scrollContainer?.nativeElement) {
+        this.scrollContainer.nativeElement.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 50);
   }
 
   nextStep() {
-    if (this.step() < 4) this.step.update(s => s + 1);
+    if (this.step() < 4) {
+      this.step.update(s => s + 1);
+      this.scrollToTop();
+    }
   }
 
   prevStep() {
-    if (this.step() > 1) this.step.update(s => s - 1);
+    if (this.step() > 1) {
+      this.step.update(s => s - 1);
+      this.scrollToTop();
+    }
   }
 
   setPhoto(dataUrl: string, type: 'entregador' | 'receptor' = 'entregador') {
@@ -1223,6 +1278,12 @@ export class IngresoComponent implements OnInit {
       this.biometricPhoto.set(dataUrl);
     } else {
       this.receptorPhoto.set(dataUrl);
+      setTimeout(() => {
+        if (this.scrollContainer?.nativeElement) {
+          this.scrollContainer.nativeElement.scrollTo({ top: this.scrollContainer.nativeElement.scrollHeight, behavior: 'smooth' });
+        }
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      }, 100);
     }
   }
 
@@ -1295,6 +1356,13 @@ export class IngresoComponent implements OnInit {
       const found = inInventario || inLocal;
 
       if (found) {
+        const excludedStates = ['DADO_DE_BAJA', 'DEVUELTO', 'PENDIENTE_DEVOLUCION', 'EN_ESPERA_DEVOLUCION'];
+        if (found.estado && excludedStates.includes(found.estado.toUpperCase())) {
+          this.validationError.set(
+            `El equipo seleccionado para reemplazo ('${found.serial || found.item}') tiene estado '${found.estado}' y no se encuentra disponible para cambio.`
+          );
+          return;
+        }
         // Validar que el equipo encontrado NO sea un periférico
         const tipoObj = this.tiposProductoFull().find(t => t.nombre === (found as any).tipo_producto);
         if (tipoObj?.es_periferico) {
@@ -1530,6 +1598,13 @@ export class IngresoComponent implements OnInit {
       const found = inInventario || inLocalPeriph || inLocalEquip;
 
       if (found) {
+        const excludedStates = ['DADO_DE_BAJA', 'DEVUELTO', 'PENDIENTE_DEVOLUCION', 'EN_ESPERA_DEVOLUCION'];
+        if (found.estado && excludedStates.includes(found.estado.toUpperCase())) {
+          this.validationError.set(
+            `El periférico seleccionado para reemplazo ('${found.serial || found.item}') tiene estado '${found.estado}' y no se encuentra disponible para cambio.`
+          );
+          return;
+        }
         // Validar que el ítem encontrado SÍ sea un periférico
         const tipoObj = this.tiposProductoFull().find(t => t.nombre === (found as any).tipo_producto);
         if (tipoObj && !tipoObj.es_periferico) {

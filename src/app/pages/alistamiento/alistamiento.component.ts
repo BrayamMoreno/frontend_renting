@@ -99,7 +99,7 @@ import { generateUUID } from '../../utils/uuid';
                   <td *ngIf="authService.hasPermission('gestionar_usuarios')" class="p-4 text-right">
                     <div class="flex items-center justify-end gap-2">
                       <select [(ngModel)]="asignacionesDraft[item.serial]" class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-brand bg-white min-w-[150px]">
-                        <option [ngValue]="undefined">Seleccionar técnico...</option>
+                        <option [ngValue]="null">Seleccionar técnico...</option>
                         <option *ngFor="let u of tecnicos()" [ngValue]="u.id">{{ u.first_name }} {{ u.last_name }} ({{ u.username }})</option>
                       </select>
                       <button (click)="asignarAlistamiento(item)" 
@@ -191,7 +191,7 @@ import { generateUUID } from '../../utils/uuid';
           <div *ngIf="!tecnicoPhoto()" class="card space-y-4">
             <h3 class="text-lg font-bold text-slate-800">2. Identificación del Técnico</h3>
             <p class="text-sm text-slate-500 mb-6">Capture su biometría para certificar el Checklist.</p>
-            <app-camera (photoCaptured)="tecnicoPhoto.set($event)"></app-camera>
+            <app-camera (photoCaptured)="onTecnicoPhotoCaptured($event)"></app-camera>
           </div>
 
           <!-- Paso B: Checklist -->
@@ -448,6 +448,13 @@ export class AlistamientoComponent implements OnInit, OnDestroy {
   tecnicoPhoto = signal('');
   isLoading = signal(false);
 
+  onTecnicoPhotoCaptured(photo: string) {
+    this.tecnicoPhoto.set(photo);
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 50);
+  }
+
   activePuntos = signal<any[]>([]);
   tiposProducto = signal<any[]>([]);
   answers = signal<Record<string, { valor: string }>>({});
@@ -472,7 +479,7 @@ export class AlistamientoComponent implements OnInit, OnDestroy {
 
   tecnicos = signal<User[]>([]);
   filterText = '';
-  asignacionesDraft: Record<string, number | undefined> = {};
+  asignacionesDraft: Record<string, number | null | undefined> = {};
   private timerInterval: any;
   currentDate = signal<Date>(new Date());
 
@@ -540,9 +547,9 @@ export class AlistamientoComponent implements OnInit, OnDestroy {
   }
 
   initDrafts() {
-    const drafts: Record<string, number | undefined> = {};
+    const drafts: Record<string, number | null | undefined> = {};
     this.storage.inventario().forEach(item => {
-      drafts[item.serial] = item.tecnico_asignado;
+      drafts[item.serial] = item.tecnico_asignado ?? null;
     });
     this.asignacionesDraft = drafts;
   }
