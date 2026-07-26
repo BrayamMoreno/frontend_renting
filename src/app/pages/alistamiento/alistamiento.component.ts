@@ -81,13 +81,13 @@ import { generateUUID } from '../../utils/uuid';
                     </span>
                   </td>
                   <td class="p-4">
-                    <div *ngIf="item.tecnico_asignado_nombre" class="flex items-center gap-2">
+                    <div *ngIf="getTecnicoAsignadoNombre(item) as tecNombre" class="flex items-center gap-2">
                       <div class="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600">
-                        {{ item.tecnico_asignado_nombre.charAt(0).toUpperCase() }}
+                        {{ tecNombre.charAt(0).toUpperCase() }}
                       </div>
-                      <span class="font-medium text-slate-700">{{ item.tecnico_asignado_nombre }}</span>
+                      <span class="font-medium text-slate-700">{{ tecNombre }}</span>
                     </div>
-                    <span *ngIf="!item.tecnico_asignado_nombre" class="text-slate-400 italic text-xs">Sin asignar</span>
+                    <span *ngIf="!getTecnicoAsignadoNombre(item)" class="text-slate-400 italic text-xs">Sin asignar</span>
                   </td>
                   <td class="p-4">
                     <div class="flex items-center gap-1 text-slate-600 font-medium" *ngIf="item.fecha_asignacion_alistamiento">
@@ -98,9 +98,11 @@ import { generateUUID } from '../../utils/uuid';
                   </td>
                   <td *ngIf="authService.hasPermission('gestionar_usuarios')" class="p-4 text-right">
                     <div class="flex items-center justify-end gap-2">
-                      <select [(ngModel)]="asignacionesDraft[item.serial]" class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-brand bg-white min-w-[150px]">
+                      <select [ngModel]="asignacionesDraft[item.serial] ?? null"
+                              (ngModelChange)="asignacionesDraft[item.serial] = $event"
+                              class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-brand bg-white min-w-[150px]">
                         <option [ngValue]="null">Seleccionar técnico...</option>
-                        <option *ngFor="let u of tecnicos()" [ngValue]="u.id">{{ u.first_name }} {{ u.last_name }} ({{ u.username }})</option>
+                        <option *ngFor="let u of tecnicos()" [ngValue]="u.id">{{ getTecnicoLabel(u) }}</option>
                       </select>
                       <button (click)="asignarAlistamiento(item)" 
                               [disabled]="!asignacionesDraft[item.serial] || asignacionesDraft[item.serial] === item.tecnico_asignado"
@@ -552,6 +554,22 @@ export class AlistamientoComponent implements OnInit, OnDestroy {
     this.asignacionesDraft = drafts;
   }
 
+  getTecnicoLabel(u: User): string {
+    const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim();
+    return fullName ? `${fullName} (${u.username})` : u.username;
+  }
+
+  getTecnicoAsignadoNombre(item: InventarioItem): string {
+    if (item.tecnico_asignado) {
+      const u = this.tecnicos().find(t => t.id === item.tecnico_asignado);
+      if (u) {
+        const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim();
+        return fullName || u.username;
+      }
+    }
+    return item.tecnico_asignado_nombre || '';
+  }
+
   async asignarAlistamiento(item: InventarioItem) {
     const tecnicoId = this.asignacionesDraft[item.serial];
     if (!tecnicoId) return;
@@ -559,7 +577,8 @@ export class AlistamientoComponent implements OnInit, OnDestroy {
     if (!tecnico) return;
 
     try {
-      await this.storage.assignAlistamiento(item.serial, tecnico.id, tecnico.username);
+      const tecnicoNombre = `${tecnico.first_name || ''} ${tecnico.last_name || ''}`.trim() || tecnico.username;
+      await this.storage.assignAlistamiento(item.serial, tecnico.id, tecnicoNombre);
     } catch (e) {
       console.error('Error al asignar', e);
     }

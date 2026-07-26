@@ -1961,12 +1961,13 @@ export class InventarioComponent implements OnInit {
     const query = this.reassociationSearchQuery().toLowerCase().trim();
     const tipos = this.tiposProductoFull();
     const allAssets = this.storage.inventario();
+    const excludedStates = ['DADO_DE_BAJA', 'DEVUELTO', 'PENDIENTE_DEVOLUCION', 'EN_ESPERA_DEVOLUCION'];
 
     const allowedAssets = allAssets.filter(a => {
       const tipoObj = tipos.find(t => t.nombre.toUpperCase() === a.tipo_producto?.toUpperCase());
       const isNotPeriph = tipoObj ? !tipoObj.es_periferico : true;
-      const isNotDecom = a.estado !== 'DADO_DE_BAJA';
-      return isNotPeriph && isNotDecom;
+      const isNotExcluded = !a.estado || !excludedStates.includes(a.estado.toUpperCase());
+      return isNotPeriph && isNotExcluded;
     });
 
     if (!query) return allowedAssets.slice(0, 10);
@@ -1983,6 +1984,12 @@ export class InventarioComponent implements OnInit {
     const peripheral = this.reassociatingPeripheral();
     const computer = this.selectedReassociationComputer();
     if (!peripheral || !computer) return;
+
+    const excludedStates = ['DADO_DE_BAJA', 'DEVUELTO', 'PENDIENTE_DEVOLUCION', 'EN_ESPERA_DEVOLUCION'];
+    if (computer.estado && excludedStates.includes(computer.estado.toUpperCase())) {
+      alert('No se puede asociar el periférico a un equipo devuelto o dado de baja.');
+      return;
+    }
 
     const dbId = computer._backendId || (computer as any).id;
     if (dbId && peripheral._backendId) {

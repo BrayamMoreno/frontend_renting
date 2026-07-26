@@ -929,6 +929,7 @@ export class IngresoComponent implements OnInit {
   filteredAsociarAssets = computed(() => {
     const query = this.searchAsociarQuery().toLowerCase().trim();
     const tipos = this.tiposProductoFull();
+    const excludedStates = ['DADO_DE_BAJA', 'DEVUELTO', 'PENDIENTE_DEVOLUCION', 'EN_ESPERA_DEVOLUCION'];
     const localAssets = this.equipmentList().map(a => ({
       ...a,
       isLocal: true
@@ -938,12 +939,12 @@ export class IngresoComponent implements OnInit {
       isLocal: false
     }));
     
-    // Filter: only computer equipment (non-peripheral) and NOT DADO_DE_BAJA
+    // Filter: only computer equipment (non-peripheral) and NOT DADO_DE_BAJA or DEVUELTO
     const allowedAssets = [...localAssets, ...dbAssets].filter(a => {
       const tipoObj = tipos.find(t => t.nombre.toUpperCase() === a.tipo_producto?.toUpperCase());
       const isNotPeriph = tipoObj ? !tipoObj.es_periferico : true;
-      const isNotDecom = a.estado !== 'DADO_DE_BAJA';
-      return isNotPeriph && isNotDecom;
+      const isNotExcluded = !a.estado || !excludedStates.includes(a.estado.toUpperCase());
+      return isNotPeriph && isNotExcluded;
     });
 
     if (!query) return allowedAssets.slice(0, 10);
