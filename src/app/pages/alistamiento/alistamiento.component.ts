@@ -10,6 +10,8 @@ import { CameraComponent } from '../../components/camera/camera.component';
 import { Alistamiento, InventarioItem } from '../../models/app-state';
 import { ActaEntregaComponent, ActaEntregaData } from '../../components/reports/acta-entrega/acta-entrega';
 import { generateUUID } from '../../utils/uuid';
+import { of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 
 @Component({
   selector: 'app-alistamiento',
@@ -98,14 +100,14 @@ import { generateUUID } from '../../utils/uuid';
                   </td>
                   <td *ngIf="authService.hasPermission('gestionar_usuarios')" class="p-4 text-right">
                     <div class="flex items-center justify-end gap-2">
-                      <select [ngModel]="asignacionesDraft[item.serial] ?? null"
-                              (ngModelChange)="asignacionesDraft[item.serial] = $event"
+                      <select [ngModel]="getAsignacionDraft(item)"
+                              (ngModelChange)="setAsignacionDraft(item.serial, $event)"
                               class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-brand bg-white min-w-[150px]">
                         <option [ngValue]="null">Seleccionar técnico...</option>
                         <option *ngFor="let u of tecnicos()" [ngValue]="u.id">{{ getTecnicoLabel(u) }}</option>
                       </select>
                       <button (click)="asignarAlistamiento(item)" 
-                              [disabled]="!asignacionesDraft[item.serial] || asignacionesDraft[item.serial] === item.tecnico_asignado"
+                              [disabled]="!getAsignacionDraft(item) || getAsignacionDraft(item) === item.tecnico_asignado"
                               class="btn-primary py-1.5 px-3 text-xs flex items-center gap-1 disabled:opacity-50">
                         <mat-icon class="scale-75">assignment_ind</mat-icon> Asignar
                       </button>
@@ -481,7 +483,7 @@ export class AlistamientoComponent implements OnInit, OnDestroy {
 
   tecnicos = signal<User[]>([]);
   filterText = '';
-  asignacionesDraft: Record<string, number | null | undefined> = {};
+  asignacionesDraft = signal<Record<string, number | null>>({});
   private timerInterval: any;
   currentDate = signal<Date>(new Date());
 
@@ -512,9 +514,11 @@ export class AlistamientoComponent implements OnInit, OnDestroy {
       if (tipoConfig && !tipoConfig.requiere_alistamiento) return false;
       if (this.filterText) {
         const text = this.filterText.toLowerCase();
+        const tecNombre = this.getTecnicoAsignadoNombre(item);
         return item.serial.toLowerCase().includes(text) || 
                item.marca.toLowerCase().includes(text) ||
-               (item.tecnico_asignado_nombre || '').toLowerCase().includes(text);
+               (item.tecnico_asignado_nombre || '').toLowerCase().includes(text) ||
+               tecNombre.toLowerCase().includes(text);
       }
       return true;
     }).sort((a, b) => {
@@ -526,7 +530,12 @@ export class AlistamientoComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.isLoading.set(true);
-    this.authService.getUsers().subscribe(users => {
+    this.authService.getUsers().pipe(
+      catchError(err => {
+        console.warn('Could not fetch users:', err);
+        return of([]);
+      })
+    ).subscribe(users => {
       this.tecnicos.set(users);
     });
     this.storage.syncAllFromApi().then(() => {
@@ -547,11 +556,26 @@ export class AlistamientoComponent implements OnInit, OnDestroy {
   }
 
   initDrafts() {
-    const drafts: Record<string, number | null | undefined> = {};
+    const drafts: Record<string, number | null> = {};
     this.storage.inventario().forEach(item => {
       drafts[item.serial] = item.tecnico_asignado ?? null;
     });
-    this.asignacionesDraft = drafts;
+    this.asignacionesDraft.set(drafts);
+  }
+
+  getAsignacionDraft(item: InventarioItem): number | null {
+    const drafts = this.asignacionesDraft();
+    if (item.serial in drafts) {
+      return drafts[item.serial];
+    }
+    return item.tecnico_asignado ?? null;
+  }
+
+  setAsignacionDraft(serial: string, tecnicoId: number | null) {
+    this.asignacionesDraft.update(d => ({
+      ...d,
+      [serial]: tecnicoId
+    }));
   }
 
   getTecnicoLabel(u: User): string {
@@ -571,7 +595,7 @@ export class AlistamientoComponent implements OnInit, OnDestroy {
   }
 
   async asignarAlistamiento(item: InventarioItem) {
-    const tecnicoId = this.asignacionesDraft[item.serial];
+    const tecnicoId = this.getAsignacionDraft(item);
     if (!tecnicoId) return;
     const tecnico = this.tecnicos().find(t => t.id === tecnicoId);
     if (!tecnico) return;

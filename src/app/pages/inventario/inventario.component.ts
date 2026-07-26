@@ -242,7 +242,7 @@ import { InventarioItem, Devolucion } from '../../models/app-state';
                         </button>
                         
                         <!-- Reasignar Periférico -->
-                        <button *ngIf="isPeripheral(item)"
+                        <button *ngIf="canReassignPeripheral(item)"
                                 (click)="openReassignModal(item); activeMenuId.set(null)"
                                 class="flex items-center w-full px-4 py-2.5 text-xs font-bold text-[#FF6B00] hover:bg-orange-50/40 gap-2.5 transition-colors">
                           <mat-icon class="text-brand scale-75">link</mat-icon> Reasignar a Equipo
@@ -1943,7 +1943,14 @@ export class InventarioComponent implements OnInit {
     this.activeMenuId.set(null);
   }
 
+  canReassignPeripheral(item: InventarioItem): boolean {
+    if (!this.isPeripheral(item)) return false;
+    const excludedStates = ['EN_ESPERA_DEVOLUCION', 'PENDIENTE_DEVOLUCION', 'DEVUELTO', 'DADO_DE_BAJA'];
+    return !item.estado || !excludedStates.includes(item.estado.toUpperCase());
+  }
+
   openReassignModal(peripheral: InventarioItem) {
+    if (!this.canReassignPeripheral(peripheral)) return;
     this.reassociatingPeripheral.set(peripheral);
     this.reassociationSearchQuery.set('');
     this.selectedReassociationComputer.set(null);
