@@ -99,7 +99,7 @@ import { InventarioItem } from '../../models/app-state';
                     {{ getPeripheralsCount(item._backendId) }} periférico(s) asociado(s)
                   </div>
                   
-                  <div *ngIf="item.equipo_asociado" class="text-[10px] text-slate-600 font-bold mt-1.5 flex items-center gap-1 bg-slate-100 w-fit px-2 py-0.5 rounded-full border border-slate-200">
+                  <div *ngIf="isPeripheral(item) && item.equipo_asociado" class="text-[10px] text-slate-600 font-bold mt-1.5 flex items-center gap-1 bg-slate-100 w-fit px-2 py-0.5 rounded-full border border-slate-200">
                     <mat-icon class="scale-[0.5] -mx-1">link</mat-icon>
                     Asociado al Ítem #{{ getAssociatedItemNumber(item.equipo_asociado) }}
                   </div>
@@ -818,14 +818,27 @@ export class BajasComponent implements OnInit {
     return 'bg-slate-50 text-slate-600 border-slate-200';
   }
 
+  isPeripheral(item?: InventarioItem | null): boolean {
+    if (!item || !item.tipo_producto) return false;
+    const tpList = this.storage.tiposProducto();
+    const tp = tpList.find((t: any) => t.nombre.toUpperCase() === String(item.tipo_producto).toUpperCase());
+    return tp ? !!tp.es_periferico : false;
+  }
+
   getPeripheralsCount(assetId: number | undefined): number {
     if (!assetId) return 0;
-    return this.storage.inventario().filter(a => a.equipo_asociado === assetId).length;
+    return this.getPeripherals(assetId).length;
   }
 
   getPeripherals(assetId: number | undefined): InventarioItem[] {
     if (!assetId) return [];
-    return this.storage.inventario().filter(a => a.equipo_asociado === assetId);
+    return this.storage.inventario().filter(a =>
+      a.equipo_asociado === assetId &&
+      a._backendId !== assetId &&
+      (a as any).id !== assetId &&
+      a.item !== assetId &&
+      this.isPeripheral(a)
+    );
   }
 
   getAssociatedItemNumber(associatedId: number | undefined): number | string {

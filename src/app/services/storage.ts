@@ -546,9 +546,17 @@ export class StorageService {
             };
 
             // Actualizar responsable_devolucion en periféricos asociados al equipo viejo
+            const isPeripheralItem = (item: any): boolean => {
+              if (!item || !item.tipo_producto) return false;
+              const tp = this.tiposProducto().find((t: any) => t.nombre.toUpperCase() === String(item.tipo_producto).toUpperCase());
+              return tp ? !!tp.es_periferico : false;
+            };
+
             const associatedPeripherals = Object.values(currentState.inventario).filter(
-              (a: any) => (a.equipo_asociado === oldAsset._backendId || a.equipo_asociado === oldAsset.item) ||
+              (a: any) => isPeripheralItem(a) && (
+                (a.equipo_asociado === oldAsset._backendId || a.equipo_asociado === oldAsset.item) ||
                 (a.es_cambio && String(a.cambio_por).trim() === itemNumStr)
+              )
             );
             for (const periph of associatedPeripherals) {
               if (periph._backendId) {
@@ -628,9 +636,17 @@ export class StorageService {
             };
 
             // Actualizar responsable_devolucion y reasociar periféricos vinculados al equipo viejo
+            const isPeripheralItem = (item: any): boolean => {
+              if (!item || !item.tipo_producto) return false;
+              const tp = this.tiposProducto().find((t: any) => t.nombre.toUpperCase() === String(item.tipo_producto).toUpperCase());
+              return tp ? !!tp.es_periferico : false;
+            };
+
             const associatedPeripherals = Object.values(currentState.inventario).filter(
-              (a: any) => (a.equipo_asociado === oldAsset._backendId || a.equipo_asociado === oldAsset.item) ||
+              (a: any) => isPeripheralItem(a) && (
+                (a.equipo_asociado === oldAsset._backendId || a.equipo_asociado === oldAsset.item) ||
                 (a.es_cambio && String(a.cambio_por).trim() === itemNumStr)
+              )
             );
             for (const periph of associatedPeripherals) {
               if (periph._backendId) {

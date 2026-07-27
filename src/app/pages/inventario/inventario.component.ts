@@ -8,7 +8,7 @@ import { firstValueFrom } from 'rxjs';
 import { StorageService } from '../../services/storage';
 import { ApiService } from '../../services/api';
 import { AuthService } from '../../services/auth.service';
-import { InventarioItem, Devolucion } from '../../models/app-state';
+import { InventarioItem, Devolucion, AssetStatus } from '../../models/app-state';
 
 @Component({
   selector: 'app-inventario',
@@ -149,7 +149,7 @@ import { InventarioItem, Devolucion } from '../../models/app-state';
                     {{ getPeripheralsCount(item._backendId) }} periférico(s) asociado(s)
                   </div>
                   
-                  <div *ngIf="item.equipo_asociado" class="text-[10px] text-slate-600 font-bold mt-1.5 flex items-center gap-1 bg-slate-100 w-fit px-2 py-0.5 rounded-full border border-slate-200">
+                  <div *ngIf="isPeripheral(item) && item.equipo_asociado" class="text-[10px] text-slate-600 font-bold mt-1.5 flex items-center gap-1 bg-slate-100 w-fit px-2 py-0.5 rounded-full border border-slate-200">
                     <mat-icon class="scale-[0.5] -mx-1">link</mat-icon>
                     Asociado al Ítem #{{ getAssociatedItemNumber(item.equipo_asociado) }}
                   </div>
@@ -693,11 +693,11 @@ import { InventarioItem, Devolucion } from '../../models/app-state';
           </div>
 
           <!-- Asociaciones -->
-          <div *ngIf="getPeripheralsCount(asset._backendId) > 0 || asset.equipo_asociado" class="bg-slate-50 rounded-2xl p-5 border border-slate-100">
+          <div *ngIf="getPeripheralsCount(asset._backendId) > 0 || (isPeripheral(asset) && asset.equipo_asociado)" class="bg-slate-50 rounded-2xl p-5 border border-slate-100">
             <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Relaciones en Inventario</p>
             <div class="flex flex-col gap-4">
               <!-- Si este equipo ES un periférico asociado a otro -->
-              <div *ngIf="asset.equipo_asociado" class="flex items-center gap-2 text-slate-700 font-bold text-sm bg-white border border-slate-200 px-3 py-2 rounded-xl w-fit">
+              <div *ngIf="isPeripheral(asset) && asset.equipo_asociado" class="flex items-center gap-2 text-slate-700 font-bold text-sm bg-white border border-slate-200 px-3 py-2 rounded-xl w-fit">
                 <mat-icon class="scale-90 text-slate-400">link</mat-icon>
                 Periférico asociado al Equipo Principal Ítem #{{ getAssociatedItemNumber(asset.equipo_asociado) }}
               </div>
@@ -1352,7 +1352,7 @@ export class InventarioComponent implements OnInit {
   ubicaciones = signal<any[]>([]);
   currentPage = signal(1);
   pageSize = signal(10);
-  
+
   marcas = signal<string[]>([]);
   procesadores = signal<string[]>([]);
   ramList = signal<string[]>([]);
@@ -1427,7 +1427,7 @@ export class InventarioComponent implements OnInit {
   getTiposPeriferico() {
     return this.tiposProductoFull().filter(t => t.es_periferico);
   }
-  
+
   abrirModalCompletarEquipo(item: InventarioItem) {
     this.completandoEquipoItem.set(item);
     this.completarForm = {
@@ -1750,6 +1750,19 @@ export class InventarioComponent implements OnInit {
     const responsable = user ? `${user.first_name} ${user.last_name}`.trim() || user.username : 'Usuario Desconocido';
     await this.storage.updateAssetStatus(asset.serial, 'EN_ESPERA_DEVOLUCION', { responsable_devolucion: responsable });
 
+    // Sincronizar responsable_devolucion y poner en EN_ESPERA_DEVOLUCION sus periféricos asociados
+    const mainAssetId = asset._backendId || (asset as any).id;
+    if (mainAssetId) {
+      const periphs = this.getPeripherals(mainAssetId);
+      for (const p of periphs) {
+        const extra: any = { responsable_devolucion: responsable };
+        const newStatus = (p.estado === 'EN_ESPERA_DEVOLUCION' || p.estado === 'PENDIENTE_DEVOLUCION' || p.estado === 'DEVUELTO' || p.estado === 'DADO_DE_BAJA')
+          ? p.estado
+          : 'EN_ESPERA_DEVOLUCION';
+        await this.storage.updateAssetStatus(p.serial, newStatus as AssetStatus, extra);
+      }
+    }
+
     // Actualizamos el modal si está abierto
     const updatedItem = this.storage.inventario().find(i => i.serial === asset.serial);
     if (updatedItem && this.selectedItem()?.serial === asset.serial) {
@@ -1898,14 +1911,27 @@ export class InventarioComponent implements OnInit {
     }
   }
 
+  isPeripheral(item?: InventarioItem | null): boolean {
+    if (!item || !item.tipo_producto) return false;
+    const tpList = this.storage.tiposProducto();
+    const tp = tpList.find((t: any) => t.nombre.toUpperCase() === String(item.tipo_producto).toUpperCase());
+    return tp ? !!tp.es_periferico : false;
+  }
+
   getPeripheralsCount(assetId?: number): number {
     if (!assetId) return 0;
-    return this.storage.inventario().filter(a => a.equipo_asociado === assetId).length;
+    return this.getPeripherals(assetId).length;
   }
 
   getPeripherals(assetId?: number): InventarioItem[] {
     if (!assetId) return [];
-    return this.storage.inventario().filter(a => a.equipo_asociado === assetId);
+    return this.storage.inventario().filter(a =>
+      a.equipo_asociado === assetId &&
+      a._backendId !== assetId &&
+      (a as any).id !== assetId &&
+      a.item !== assetId &&
+      this.isPeripheral(a)
+    );
   }
 
   getAssociatedItemNumber(associatedId?: number): number | string {
@@ -1939,12 +1965,6 @@ export class InventarioComponent implements OnInit {
     }
 
     return null;
-  }
-
-  isPeripheral(item: InventarioItem): boolean {
-    const tipos = this.tiposProductoFull();
-    const tipoObj = tipos.find(t => t.nombre.toUpperCase() === item.tipo_producto?.toUpperCase());
-    return tipoObj ? tipoObj.es_periferico : false;
   }
 
   toggleActionsMenu(item: InventarioItem, event: MouseEvent) {
