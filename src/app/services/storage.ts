@@ -394,9 +394,11 @@ export class StorageService {
         .map(async eq => {
           const itemNumStr = String(eq.cambio_por).trim();
           const itemNum = Number(itemNumStr);
-          if (isNaN(itemNum)) return null;
 
-          const oldAsset = Object.values(currentState.inventario).find(a => a.item === itemNum);
+          const oldAsset = Object.values(currentState.inventario).find((a: any) =>
+            (!isNaN(itemNum) && a.item === itemNum) ||
+            (a.serial && a.serial.toUpperCase() === itemNumStr.toUpperCase())
+          ) as any;
 
           if (oldAsset && oldAsset._backendId) {
             const nuevoEstado = 'EN_ESPERA_DEVOLUCION';
@@ -404,7 +406,7 @@ export class StorageService {
               estado: nuevoEstado
             }));
             return { action: 'updated', serial: oldAsset.serial, estado: nuevoEstado };
-          } else {
+          } else if (!isNaN(itemNum)) {
             const ghostPayload: InventarioItemPayload = {
               item: itemNum,
               serial: `CAMBIO-${itemNumStr}-${Date.now()}`,
@@ -416,6 +418,7 @@ export class StorageService {
             const createdGhost = await firstValueFrom(this.api.createInventarioItem(ghostPayload));
             return { action: 'created', createdGhost };
           }
+          return null;
         });
 
       const replacementsResults = await Promise.all(replacementsPromises);

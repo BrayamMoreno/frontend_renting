@@ -1315,10 +1315,24 @@ export class IngresoComponent implements OnInit {
   addManualAsset() {
     if (this.newAsset.serial) {
       this.newAsset.serial = this.newAsset.serial.trim().toUpperCase();
+    } else {
+      this.validationError.set('El número de serial es obligatorio para agregar el equipo.');
+      return;
     }
     if (this.newAsset.cambio_por) {
       this.newAsset.cambio_por = this.newAsset.cambio_por.trim().toUpperCase();
     }
+
+    const serialUpper = this.newAsset.serial;
+    const existsInDb = this.storage.inventario().some(a => a.serial?.toUpperCase() === serialUpper);
+    const existsInLocalEquip = this.equipmentList().some(a => a.serial?.toUpperCase() === serialUpper);
+    const existsInLocalPeriph = this.peripheralsList().some(a => a.serial?.toUpperCase() === serialUpper);
+
+    if (existsInDb || existsInLocalEquip || existsInLocalPeriph) {
+      this.validationError.set(`El serial '${serialUpper}' ya se encuentra registrado en el sistema o en la lista actual de ingreso.`);
+      return;
+    }
+
     const itemNum = this.newAsset.item ? Number(this.newAsset.item) : null;
     const selectedTipo = this.newAsset.tipo_producto;
 
@@ -1468,10 +1482,24 @@ export class IngresoComponent implements OnInit {
   addManualPeripheral() {
     if (this.newPeripheral.serial) {
       this.newPeripheral.serial = this.newPeripheral.serial.trim().toUpperCase();
+    } else {
+      this.validationError.set('El número de serial es obligatorio para agregar el periférico.');
+      return;
     }
     if (this.newPeripheral.cambio_por) {
       this.newPeripheral.cambio_por = this.newPeripheral.cambio_por.trim().toUpperCase();
     }
+
+    const serialUpper = this.newPeripheral.serial;
+    const existsInDb = this.storage.inventario().some(a => a.serial?.toUpperCase() === serialUpper);
+    const existsInLocalEquip = this.equipmentList().some(a => a.serial?.toUpperCase() === serialUpper);
+    const existsInLocalPeriph = this.peripheralsList().some(a => a.serial?.toUpperCase() === serialUpper);
+
+    if (existsInDb || existsInLocalEquip || existsInLocalPeriph) {
+      this.validationError.set(`El serial '${serialUpper}' ya se encuentra registrado en el sistema o en la lista actual de ingreso.`);
+      return;
+    }
+
     const itemNum = this.newPeripheral.item ? Number(this.newPeripheral.item) : null;
     const selectedTipo = this.newPeripheral.tipo_producto;
 
@@ -1954,6 +1982,25 @@ export class IngresoComponent implements OnInit {
 
     const todosEquipos = [...this.equipmentList(), ...this.peripheralsList()];
     for (const eq of todosEquipos) {
+      if (!eq.serial || eq.serial.trim() === '') {
+        this.validationError.set('Hay un ítem en la lista sin número de serial asignado.');
+        this.isSaving.set(false);
+        return;
+      }
+      const serialUpper = eq.serial.trim().toUpperCase();
+      const duplicateInList = todosEquipos.filter(x => x.serial?.trim().toUpperCase() === serialUpper);
+      if (duplicateInList.length > 1) {
+        this.validationError.set(`El serial '${serialUpper}' está duplicado en la lista actual de ingreso.`);
+        this.isSaving.set(false);
+        return;
+      }
+      const inDb = this.storage.inventario().some(item => item.serial?.toUpperCase() === serialUpper);
+      if (inDb) {
+        this.validationError.set(`El serial '${serialUpper}' ya está registrado en la base de datos de inventario.`);
+        this.isSaving.set(false);
+        return;
+      }
+
       const itemNum = eq.item ? Number(eq.item) : null;
       const selectedTipo = eq.tipo_producto;
       if (itemNum && selectedTipo) {
@@ -1965,8 +2012,8 @@ export class IngresoComponent implements OnInit {
             this.isSaving.set(false);
             return;
           }
-          const inDb = this.storage.inventario().some(item => Number(item.item) === itemNum);
-          if (inDb) {
+          const itemInDb = this.storage.inventario().some(item => Number(item.item) === itemNum);
+          if (itemInDb) {
             this.validationError.set(`El número de ítem '${itemNum}' ya está registrado en la base de datos para la categoría '${selectedTipo}'.`);
             this.isSaving.set(false);
             return;
@@ -2038,8 +2085,29 @@ export class IngresoComponent implements OnInit {
       equipos: [...this.equipmentList(), ...this.peripheralsList()]
     };
 
-    await this.storage.addRecepcion(recepcion);
-    this.isSaving.set(false);
-    this.router.navigate(['/dashboard']);
+    try {
+      await this.storage.addRecepcion(recepcion);
+      this.isSaving.set(false);
+      this.router.navigate(['/dashboard']);
+    } catch (err: any) {
+      this.isSaving.set(false);
+      console.error('Error guardando recepción en la API:', err);
+      let msg = 'Error al guardar la recepción en el servidor.';
+      if (err?.error) {
+        if (typeof err.error === 'object') {
+          const parts: string[] = [];
+          for (const [key, val] of Object.entries(err.error)) {
+            const strVal = Array.isArray(val) ? val.join(', ') : String(val);
+            parts.push(`${key}: ${strVal}`);
+          }
+          if (parts.length > 0) {
+            msg = `Error de validación en la API (${parts.join(' | ')})`;
+          }
+        } else if (typeof err.error === 'string') {
+          msg = err.error;
+        }
+      }
+      this.validationError.set(msg);
+    }
   }
 }
