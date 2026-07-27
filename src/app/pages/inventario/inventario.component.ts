@@ -1651,10 +1651,15 @@ export class InventarioComponent implements OnInit {
 
     await this.storage.updateAssetStatus(asset.serial, 'ENTREGADO', extraFields);
 
-    // Entregar periféricos asociados automáticamente
+    // Entregar periféricos asociados automáticamente (excluyendo aquellos pendientes de devolución o ya devueltos)
     const mainAssetId = asset._backendId || (asset as any).id;
     if (mainAssetId) {
-      const associatedPeripherals = this.storage.inventario().filter(a => a.equipo_asociado === mainAssetId);
+      const associatedPeripherals = this.storage.inventario().filter(
+        a => a.equipo_asociado === mainAssetId &&
+          a.estado !== 'EN_ESPERA_DEVOLUCION' &&
+          a.estado !== 'PENDIENTE_DEVOLUCION' &&
+          a.estado !== 'DEVUELTO'
+      );
       for (const peripheral of associatedPeripherals) {
         await this.storage.updateAssetStatus(peripheral.serial, 'ENTREGADO', extraFields);
       }

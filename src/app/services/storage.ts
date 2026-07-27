@@ -634,10 +634,13 @@ export class StorageService {
             );
             for (const periph of associatedPeripherals) {
               if (periph._backendId) {
+                const isPendingDevolucion = periph.estado === 'EN_ESPERA_DEVOLUCION' ||
+                  periph.estado === 'PENDIENTE_DEVOLUCION' ||
+                  periph.estado === 'DEVUELTO';
                 const periphUpdatePayload: any = {
                   responsable_devolucion: alistamiento.tecnico_nombre
                 };
-                if (asset.item) {
+                if (asset.item && !isPendingDevolucion) {
                   periphUpdatePayload.equipo_asociado = asset.item;
                 }
                 await firstValueFrom(this.api.updateInventarioItem(
@@ -648,7 +651,7 @@ export class StorageService {
                   updatedInventario[periph.serial] = {
                     ...updatedInventario[periph.serial],
                     responsable_devolucion: alistamiento.tecnico_nombre,
-                    ...(asset.item ? { equipo_asociado: asset.item } : {})
+                    ...((asset.item && !isPendingDevolucion) ? { equipo_asociado: asset.item } : {})
                   };
                 }
               }
