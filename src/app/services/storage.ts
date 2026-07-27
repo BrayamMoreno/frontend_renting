@@ -462,6 +462,7 @@ export class StorageService {
         recepciones: updatedRecepciones,
         inventario: updatedInventario
       });
+      await this.loadInventarioFromApi();
     } catch (e: any) {
       console.error('Error guardando recepción en API:', e);
       this.apiError.set('Error al guardar en el servidor.');
