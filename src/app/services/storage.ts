@@ -652,7 +652,8 @@ export class StorageService {
               if (periph._backendId) {
                 const isPendingDevolucion = periph.estado === 'EN_ESPERA_DEVOLUCION' ||
                   periph.estado === 'PENDIENTE_DEVOLUCION' ||
-                  periph.estado === 'DEVUELTO';
+                  periph.estado === 'DEVUELTO' ||
+                  periph.estado === 'DADO_DE_BAJA';
                 const periphUpdatePayload: any = {
                   responsable_devolucion: alistamiento.tecnico_nombre
                 };
