@@ -549,10 +549,15 @@ export class ActaEntregaManualComponent implements OnInit {
         }
       ]);
 
-      // Auto-load associated peripherals
+      // Auto-load associated peripherals (excluding pending return, returned or decommissioned)
       const matchedId = match._backendId || (match as any).id;
-      if (matchedId) {
-        const associated = allAssets.filter(a => a.equipo_asociado === matchedId);
+      const matchedItem = match.item;
+      if (matchedId || matchedItem) {
+        const excludedStates = ['EN_ESPERA_DEVOLUCION', 'PENDIENTE_DEVOLUCION', 'DEVUELTO', 'DADO_DE_BAJA'];
+        const associated = allAssets.filter(a =>
+          ((matchedId && a.equipo_asociado === matchedId) || (matchedItem && a.equipo_asociado === matchedItem)) &&
+          (!a.estado || !excludedStates.includes(a.estado.toUpperCase()))
+        );
         associated.forEach(p => {
           const pExists = this.activos().some(a => a.serial.toLowerCase() === p.serial.toLowerCase());
           if (!pExists) {

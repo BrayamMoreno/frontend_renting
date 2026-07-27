@@ -801,7 +801,13 @@ export class AlistamientoComponent implements OnInit, OnDestroy {
     const alistamiento = this.completedAlistamientoData;
 
     const allAssets = this.storage.inventario();
-    const peripherals = allAssets.filter(a => a.equipo_asociado === asset._backendId);
+    const assetId = asset._backendId || (asset as any).id;
+    const itemNum = asset.item;
+    const excludedStates = ['EN_ESPERA_DEVOLUCION', 'PENDIENTE_DEVOLUCION', 'DEVUELTO', 'DADO_DE_BAJA'];
+    const peripherals = allAssets.filter(a =>
+      ((assetId && a.equipo_asociado === assetId) || (itemNum && a.equipo_asociado === itemNum)) &&
+      (!a.estado || !excludedStates.includes(a.estado.toUpperCase()))
+    );
 
     const data: ActaEntregaData = {
       asset: {
