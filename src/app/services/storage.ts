@@ -119,6 +119,8 @@ export class StorageService {
           responsable_devolucion: item.responsable_devolucion,
           es_propio: item.es_propio,
           equipo_asociado: item.equipo_asociado,
+          fecha_inicio_reemplazo: item.fecha_inicio_reemplazo,
+          equipo_reemplazante_serial: item.equipo_reemplazante_serial,
           _backendId: item.id,
           creado_automaticamente: item.creado_automaticamente ?? false
         };
@@ -522,9 +524,10 @@ export class StorageService {
       };
 
       // Si el equipo es un cambio, asignar al técnico como responsable de devolver
-      // el equipo antiguo que está siendo reemplazado.
+      // el equipo antiguo que está siendo reemplazado y sus periféricos asociados.
       if (asset.es_cambio && asset.cambio_por) {
-        const itemNum = Number(String(asset.cambio_por).trim());
+        const itemNumStr = String(asset.cambio_por).trim();
+        const itemNum = Number(itemNumStr);
         if (!isNaN(itemNum)) {
           const oldAsset = Object.values(currentState.inventario).find(
             (a: any) => a.item === itemNum &&
@@ -541,6 +544,26 @@ export class StorageService {
               ...updatedInventario[oldAsset.serial],
               responsable_devolucion: tecnicoNombre
             };
+
+            // Actualizar responsable_devolucion en periféricos asociados al equipo viejo
+            const associatedPeripherals = Object.values(currentState.inventario).filter(
+              (a: any) => (a.equipo_asociado === oldAsset._backendId || a.equipo_asociado === oldAsset.item) ||
+                (a.es_cambio && String(a.cambio_por).trim() === itemNumStr)
+            );
+            for (const periph of associatedPeripherals) {
+              if (periph._backendId) {
+                await firstValueFrom(this.api.updateInventarioItem(
+                  periph._backendId,
+                  { responsable_devolucion: tecnicoNombre }
+                ));
+                if (updatedInventario[periph.serial]) {
+                  updatedInventario[periph.serial] = {
+                    ...updatedInventario[periph.serial],
+                    responsable_devolucion: tecnicoNombre
+                  };
+                }
+              }
+            }
           }
         }
       }
@@ -575,7 +598,7 @@ export class StorageService {
       }
 
       // 2.5 Si el equipo alistado es un cambio, poner el equipo viejo en EN_ESPERA_DEVOLUCION
-      //     y asignar al alistador como responsable.
+      //     y asignar al alistador como responsable del equipo y sus periféricos.
       const updatedInventario = { ...currentState.inventario };
       if (asset?.es_cambio && asset?.cambio_por) {
         const itemNumStr = String(asset.cambio_por).trim();
@@ -603,6 +626,33 @@ export class StorageService {
               fecha_inicio_reemplazo: new Date().toISOString(),
               equipo_reemplazante_serial: alistamiento.serial
             };
+
+            // Actualizar responsable_devolucion y reasociar periféricos vinculados al equipo viejo
+            const associatedPeripherals = Object.values(currentState.inventario).filter(
+              (a: any) => (a.equipo_asociado === oldAsset._backendId || a.equipo_asociado === oldAsset.item) ||
+                (a.es_cambio && String(a.cambio_por).trim() === itemNumStr)
+            );
+            for (const periph of associatedPeripherals) {
+              if (periph._backendId) {
+                const periphUpdatePayload: any = {
+                  responsable_devolucion: alistamiento.tecnico_nombre
+                };
+                if (asset.item) {
+                  periphUpdatePayload.equipo_asociado = asset.item;
+                }
+                await firstValueFrom(this.api.updateInventarioItem(
+                  periph._backendId,
+                  periphUpdatePayload
+                ));
+                if (updatedInventario[periph.serial]) {
+                  updatedInventario[periph.serial] = {
+                    ...updatedInventario[periph.serial],
+                    responsable_devolucion: alistamiento.tecnico_nombre,
+                    ...(asset.item ? { equipo_asociado: asset.item } : {})
+                  };
+                }
+              }
+            }
           } else {
             // Crear nuevo registro (ghost) con estado EN_ESPERA_DEVOLUCION y responsable
             const ghostPayload: InventarioItemPayload = {

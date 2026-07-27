@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { StorageService } from '../../services/storage';
 import { ApiService } from '../../services/api';
 import { firstValueFrom } from 'rxjs';
+import { InventarioItem } from '../../models/app-state';
 
 @Component({
   selector: 'app-pendientes-devolucion',
@@ -138,6 +139,10 @@ import { firstValueFrom } from 'rxjs';
                   <td class="px-4 py-3">
                     <p class="font-semibold text-slate-800">{{ item.marca }} {{ item.modelo }}</p>
                     <p class="text-xs text-slate-400">{{ item.tipo_producto || 'N/A' }}</p>
+                    <div *ngIf="getReplacementInfo(item) as repInfo" class="mt-1 text-[10px] text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 w-fit flex items-center gap-1">
+                      <mat-icon class="scale-[0.5] -mx-1">swap_horiz</mat-icon>
+                      Será reemplazado por {{ repInfo.displayText }}
+                    </div>
                   </td>
                   <td class="px-4 py-3">
                     <span class="text-xs font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded">
@@ -294,7 +299,7 @@ export class PendientesDevolucionComponent implements OnInit {
     return items.filter(item => {
       const matchesTab = tab === 'propios' ? (item.es_propio === true) : (!item.es_propio);
 
-      const matchesSearch = !query || 
+      const matchesSearch = !query ||
         item.serial.toLowerCase().includes(query) ||
         item.marca.toLowerCase().includes(query) ||
         item.modelo.toLowerCase().includes(query) ||
@@ -402,5 +407,32 @@ export class PendientesDevolucionComponent implements OnInit {
     if (dias >= 7) return 'bg-red-100 text-red-700';
     if (dias >= 4) return 'bg-amber-100 text-amber-700';
     return 'bg-green-100 text-green-700';
+  }
+
+  getReplacementInfo(asset?: InventarioItem | null): { itemNumber?: number | string; serial?: string; displayText: string } | null {
+    if (!asset) return null;
+    const inventario = this.storage.inventario();
+
+    if (asset.equipo_reemplazante_serial) {
+      const rep = inventario.find(a => a.serial?.toUpperCase() === asset.equipo_reemplazante_serial?.toUpperCase());
+      if (rep && rep.item) {
+        return { itemNumber: rep.item, serial: rep.serial, displayText: `Ítem #${rep.item}` };
+      }
+      return { serial: asset.equipo_reemplazante_serial, displayText: `Serial ${asset.equipo_reemplazante_serial}` };
+    }
+
+    const rep = inventario.find(a => a.es_cambio && (
+      (asset.item != null && String(a.cambio_por).trim() === String(asset.item).trim()) ||
+      (asset.serial && String(a.cambio_por).trim().toUpperCase() === asset.serial.trim().toUpperCase())
+    ));
+
+    if (rep) {
+      if (rep.item) {
+        return { itemNumber: rep.item, serial: rep.serial, displayText: `Ítem #${rep.item}` };
+      }
+      return { serial: rep.serial, displayText: `Serial ${rep.serial}` };
+    }
+
+    return null;
   }
 }

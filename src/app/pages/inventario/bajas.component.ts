@@ -103,6 +103,11 @@ import { InventarioItem } from '../../models/app-state';
                     <mat-icon class="scale-[0.5] -mx-1">link</mat-icon>
                     Asociado al Ítem #{{ getAssociatedItemNumber(item.equipo_asociado) }}
                   </div>
+
+                  <div *ngIf="getReplacementInfo(item) as repInfo" class="text-[10px] text-purple-700 font-bold mt-1 flex items-center gap-1 bg-purple-50 w-fit px-2 py-0.5 rounded-full border border-purple-200">
+                    <mat-icon class="scale-[0.5] -mx-1">swap_horiz</mat-icon>
+                    Reemplazado por {{ repInfo.displayText }}
+                  </div>
                 </td>
                 <td class="px-5 py-3 text-xs text-slate-600">
                   <ng-container *ngIf="item.procesador || item.ram || item.disco; else noSpecs">
@@ -309,6 +314,14 @@ import { InventarioItem } from '../../models/app-state';
                 <div class="border border-amber-100 bg-amber-50 rounded-xl p-3" *ngIf="asset.es_cambio">
                   <p class="text-[10px] text-amber-600 font-bold uppercase">Reemplaza Ítem</p>
                   <p class="text-sm font-bold text-amber-800 mt-0.5">#{{ asset.cambio_por }}</p>
+                </div>
+                <div class="border border-purple-100 bg-purple-50 rounded-xl p-3" *ngIf="getReplacementInfo(asset) as repInfo">
+                  <p class="text-[10px] text-purple-600 font-bold uppercase">Reemplazado por</p>
+                  <p class="text-sm font-bold text-purple-900 mt-0.5 flex items-center gap-1.5">
+                    <mat-icon class="scale-75 text-purple-600">swap_horiz</mat-icon>
+                    <span>{{ repInfo.displayText }}</span>
+                    <span *ngIf="repInfo.itemNumber && repInfo.serial" class="text-xs font-normal text-purple-600">({{ repInfo.serial }})</span>
+                  </p>
                 </div>
               </div>
             </div>
@@ -819,5 +832,32 @@ export class BajasComponent implements OnInit {
     if (!associatedId) return '-';
     const mainAsset = this.storage.inventario().find(a => a._backendId === associatedId || (a as any).id === associatedId);
     return mainAsset ? (mainAsset.item || '-') : '-';
+  }
+
+  getReplacementInfo(asset?: InventarioItem | null): { itemNumber?: number | string; serial?: string; displayText: string } | null {
+    if (!asset) return null;
+    const inventario = this.storage.inventario();
+
+    if (asset.equipo_reemplazante_serial) {
+      const rep = inventario.find(a => a.serial?.toUpperCase() === asset.equipo_reemplazante_serial?.toUpperCase());
+      if (rep && rep.item) {
+        return { itemNumber: rep.item, serial: rep.serial, displayText: `Ítem #${rep.item}` };
+      }
+      return { serial: asset.equipo_reemplazante_serial, displayText: `Serial ${asset.equipo_reemplazante_serial}` };
+    }
+
+    const rep = inventario.find(a => a.es_cambio && (
+      (asset.item != null && String(a.cambio_por).trim() === String(asset.item).trim()) ||
+      (asset.serial && String(a.cambio_por).trim().toUpperCase() === asset.serial.trim().toUpperCase())
+    ));
+
+    if (rep) {
+      if (rep.item) {
+        return { itemNumber: rep.item, serial: rep.serial, displayText: `Ítem #${rep.item}` };
+      }
+      return { serial: rep.serial, displayText: `Serial ${rep.serial}` };
+    }
+
+    return null;
   }
 }
