@@ -484,15 +484,7 @@ export class StorageService {
         // Actualizar el estado local con la respuesta real del backend
         // (el backend puede haber asignado campos como fecha_baja automáticamente)
         if (response) {
-          const latestState = this.stateSignal();
-          const refreshedInventario = { ...latestState.inventario };
-          refreshedInventario[serial] = {
-            ...refreshedInventario[serial],
-            fecha_baja: response.fecha_baja ?? refreshedInventario[serial].fecha_baja,
-            fecha_inicio_reemplazo: response.fecha_inicio_reemplazo ?? refreshedInventario[serial].fecha_inicio_reemplazo,
-            estado: response.estado ?? status,
-          };
-          this.updateState({ ...latestState, inventario: refreshedInventario });
+          await this.loadInventarioFromApi();
         }
       } catch (e) {
         console.error('Error actualizando estado en API:', e);
@@ -576,7 +568,7 @@ export class StorageService {
         }
       }
 
-      this.updateState({ ...currentState, inventario: updatedInventario });
+      await this.loadInventarioFromApi();
     } catch (e) {
       console.error('Error asignando alistamiento:', e);
       throw e;
@@ -706,11 +698,7 @@ export class StorageService {
         };
       }
 
-      this.updateState({
-        ...currentState,
-        alistamientos: updatedAlistamientos,
-        inventario: updatedInventario
-      });
+      await this.loadInventarioFromApi();
 
     } catch (e) {
       console.error('Error al guardar el alistamiento:', e);
