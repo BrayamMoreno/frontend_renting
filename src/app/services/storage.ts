@@ -478,9 +478,10 @@ export class StorageService {
     this.updateState({ ...currentState, inventario: updatedInventario });
 
     // Intentar sincronizar con backend si tenemos el ID
-    if (asset._backendId) {
+    const backendId = asset ? (asset._backendId || asset.id) : undefined;
+    if (backendId) {
       try {
-        const response: any = await firstValueFrom(this.api.updateInventarioItem(asset._backendId, { estado: status, ...extraFields }));
+        const response: any = await firstValueFrom(this.api.updateInventarioItem(backendId, { estado: status, ...extraFields }));
         // Actualizar el estado local con la respuesta real del backend
         // (el backend puede haber asignado campos como fecha_baja automáticamente)
         if (response) {
@@ -495,12 +496,13 @@ export class StorageService {
   async assignAlistamiento(serial: string, tecnicoId: number, tecnicoNombre: string): Promise<void> {
     const currentState = this.stateSignal();
     const asset = currentState.inventario[serial] as any;
-    if (!asset || !asset._backendId) return;
+    const backendId = asset ? (asset._backendId || asset.id) : undefined;
+    if (!asset || !backendId) return;
     
     this.isLoading.set(true);
     try {
       const fecha = new Date().toISOString();
-      await firstValueFrom(this.api.updateInventarioItem(asset._backendId, {
+      await firstValueFrom(this.api.updateInventarioItem(backendId, {
         estado: 'ALISTAMIENTO',
         tecnico_asignado: tecnicoId,
         fecha_asignacion_alistamiento: fecha
@@ -830,8 +832,9 @@ export class StorageService {
       // 2. Vincular los items a la devolución y actualizar su estado
       try {
         const updatePromises = items.map(item => {
-          if (item._backendId) {
-            return firstValueFrom(this.api.updateInventarioItem(item._backendId, {
+          const backendId = item._backendId || (item as any).id;
+          if (backendId) {
+            return firstValueFrom(this.api.updateInventarioItem(backendId, {
               estado: 'PENDIENTE_DEVOLUCION',
               comentario_devolucion: item.comentario_devolucion,
               devolucion: createdDevolucion.id
