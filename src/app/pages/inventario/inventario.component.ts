@@ -154,15 +154,6 @@ import { InventarioItem, Devolucion, AssetStatus } from '../../models/app-state'
                     Asociado al Ítem #{{ getAssociatedItemNumber(item.equipo_asociado) }}
                   </div>
 
-                  <div *ngIf="item.es_cambio" class="text-[10px] text-amber-700 font-bold mt-1 flex items-center gap-1 bg-amber-50 w-fit px-2 py-0.5 rounded-full border border-amber-200">
-                    <mat-icon class="scale-[0.5] -mx-1">swap_horiz</mat-icon>
-                    Reemplaza Ítem #{{ item.cambio_por }}
-                  </div>
-
-                  <div *ngIf="getReplacementInfo(item) as repInfo" class="text-[10px] text-purple-700 font-bold mt-1 flex items-center gap-1 bg-purple-50 w-fit px-2 py-0.5 rounded-full border border-purple-200">
-                    <mat-icon class="scale-[0.5] -mx-1">swap_horiz</mat-icon>
-                    {{ (item.estado === 'DADO_DE_BAJA' || item.estado === 'DEVUELTO') ? 'Reemplazado por ' : 'Este equipo será reemplazado por ' }}{{ repInfo.displayText }}
-                  </div>
                 </td>
                 <td class="px-5 py-3 text-xs text-slate-600">
                   <ng-container *ngIf="item.procesador || item.ram || item.disco; else noSpecs">

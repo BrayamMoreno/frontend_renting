@@ -4,6 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { FormsModule } from '@angular/forms';
 import { StorageService } from '../../services/storage';
 import { ApiService } from '../../services/api';
+import { AuthService, User } from '../../services/auth.service';
 import { firstValueFrom } from 'rxjs';
 import { InventarioItem } from '../../models/app-state';
 
@@ -150,11 +151,17 @@ import { InventarioItem } from '../../models/app-state';
                     </span>
                   </td>
                   <td class="px-4 py-3">
-                    <div class="flex flex-col gap-1">
+                    <div class="flex items-center gap-1.5">
                       <div *ngIf="item.responsable_devolucion" class="flex items-center gap-1 text-[10px] text-red-600 font-bold bg-red-50 px-1.5 py-0.5 rounded border border-red-100 w-fit">
                         <mat-icon class="scale-[0.6] w-3 h-3 flex items-center justify-center">person</mat-icon> {{ item.responsable_devolucion }}
                       </div>
                       <span *ngIf="!item.responsable_devolucion" class="text-slate-400 text-xs italic">—</span>
+                      <button *ngIf="isAdmin()"
+                              (click)="openAssignRespModal(item)"
+                              title="Asignar o editar responsable de devolución (Solo Administradores)"
+                              class="p-1 text-slate-400 hover:text-brand hover:bg-slate-100 rounded-lg transition-all">
+                        <mat-icon class="scale-75">edit</mat-icon>
+                      </button>
                     </div>
                   </td>
                   <td class="px-4 py-3 text-slate-500 text-xs">
@@ -258,16 +265,65 @@ import { InventarioItem } from '../../models/app-state';
         </div>
       </div>
 
+      <!-- Modal Asignar Responsable -->
+      <div *ngIf="selectedItemForResp()" class="fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 border border-slate-100">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center font-bold">
+                <mat-icon>assignment_ind</mat-icon>
+              </div>
+              <div>
+                <h3 class="font-bold text-slate-800 text-lg">Asignar Responsable</h3>
+                <p class="text-xs text-slate-500">Serial: {{ selectedItemForResp()?.serial }}</p>
+              </div>
+            </div>
+            <button (click)="closeAssignRespModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Seleccionar Usuario (Admin, Google o Aplicación)</label>
+              <select [ngModel]="selectedUserResp()" (ngModelChange)="selectedUserResp.set($event)" class="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand/20 cursor-pointer">
+                <option value="">-- Sin Responsable --</option>
+                <option *ngFor="let u of approvedUsers()" [value]="getUserValue(u)">
+                  {{ getUserLabel(u) }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+            <button (click)="closeAssignRespModal()" class="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-all">
+              Cancelar
+            </button>
+            <button (click)="saveResponsable()" [disabled]="isSavingResp()" class="px-5 py-2 text-sm font-bold text-white bg-brand hover:bg-brand/90 rounded-xl shadow-lg shadow-brand/20 transition-all disabled:opacity-50 flex items-center gap-2">
+              <div *ngIf="isSavingResp()" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              Guardar Responsable
+            </button>
+          </div>
+        </div>
+      </div>
+
     </div>
   `
 })
 export class PendientesDevolucionComponent implements OnInit {
   storage = inject(StorageService);
   private api = inject(ApiService);
+  private authService = inject(AuthService);
 
   loading = signal(true);
   verificando = signal(false);
   enEspera = signal<any[]>([]);
+  usersList = signal<User[]>([]);
+
+  // Modal responsable
+  selectedItemForResp = signal<any | null>(null);
+  selectedUserResp = signal<string>('');
+  isSavingResp = signal(false);
 
   // Filtros
   searchQuery = signal<string>('');
@@ -351,15 +407,71 @@ export class PendientesDevolucionComponent implements OnInit {
   async cargarDatos() {
     this.loading.set(true);
     try {
-      const [items] = await Promise.all([
+      const [items, _, users] = await Promise.all([
         firstValueFrom(this.api.getEnEsperaDevolucion()),
-        this.storage.loadAlertasFromApi()
+        this.storage.loadAlertasFromApi(),
+        firstValueFrom(this.authService.getUsers()).catch(() => [])
       ]);
       this.enEspera.set(items);
+      this.usersList.set(users || []);
     } catch (e) {
       console.error('Error cargando pendientes:', e);
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  approvedUsers = computed(() => {
+    return this.usersList().filter((u: any) => u.is_approved !== false);
+  });
+
+  getUserLabel(u: any): string {
+    const name = `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.username || u.email;
+    let type = u.role || (u.is_superuser || u.is_staff ? 'ADMIN' : 'Usuario');
+    if (u.is_google_user) {
+      type += ' / Google';
+    }
+    return `${name} (${type})`;
+  }
+
+  getUserValue(u: any): string {
+    const name = `${u.first_name || ''} ${u.last_name || ''}`.trim();
+    return name || u.username || u.email;
+  }
+
+  isAdmin(): boolean {
+    return this.authService.isAdmin();
+  }
+
+  openAssignRespModal(item: any) {
+    if (!this.isAdmin()) return;
+    this.selectedItemForResp.set(item);
+    this.selectedUserResp.set(item.responsable_devolucion || '');
+  }
+
+  closeAssignRespModal() {
+    this.selectedItemForResp.set(null);
+    this.selectedUserResp.set('');
+  }
+
+  async saveResponsable() {
+    if (!this.isAdmin()) return;
+    const item = this.selectedItemForResp();
+    if (!item) return;
+
+    const respName = this.selectedUserResp().trim();
+    this.isSavingResp.set(true);
+
+    try {
+      await this.storage.updateAssetStatus(item.serial, item.estado, {
+        responsable_devolucion: respName || null
+      });
+      await this.cargarDatos();
+      this.closeAssignRespModal();
+    } catch (err) {
+      console.error('Error actualizando responsable:', err);
+    } finally {
+      this.isSavingResp.set(false);
     }
   }
 
