@@ -2034,10 +2034,11 @@ export class InventarioComponent implements OnInit {
     const excludedStates = ['DADO_DE_BAJA', 'DEVUELTO', 'PENDIENTE_DEVOLUCION', 'EN_ESPERA_DEVOLUCION'];
 
     const allowedAssets = allAssets.filter(a => {
-      const tipoObj = tipos.find(t => t.nombre.toUpperCase() === a.tipo_producto?.toUpperCase());
-      const isNotPeriph = tipoObj ? !tipoObj.es_periferico : true;
+      const tpName = a.tipo_producto ? a.tipo_producto.trim().toUpperCase() : '';
+      const tipoObj = tipos.find(t => t.nombre.trim().toUpperCase() === tpName);
+      const isPeriph = tipoObj ? !!tipoObj.es_periferico : false;
       const isNotExcluded = !a.estado || !excludedStates.includes(a.estado.toUpperCase());
-      return isNotPeriph && isNotExcluded;
+      return !isPeriph && isNotExcluded;
     });
 
     if (!query) return allowedAssets.slice(0, 10);
@@ -2061,18 +2062,25 @@ export class InventarioComponent implements OnInit {
       return;
     }
 
-    const dbId = computer._backendId || (computer as any).id;
-    if (dbId && peripheral._backendId) {
+    const targetId = computer.item || computer._backendId || (computer as any).id;
+    if (targetId && peripheral._backendId) {
       try {
         await firstValueFrom(this.api.updateInventarioItem(peripheral._backendId, {
-          equipo_asociado: dbId,
-          ubicacion: computer.ubicacion
+          equipo_asociado: targetId,
+          ...(computer.ubicacion ? { ubicacion: computer.ubicacion } : {})
         }));
         await this.storage.loadInventarioFromApi();
         this.closeReassignModal();
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error reassigning peripheral:', err);
-        alert('No se pudo reasignar el periférico.');
+        let msg = 'No se pudo reasignar el periférico.';
+        if (err?.error?.equipo_asociado) {
+          const detail = Array.isArray(err.error.equipo_asociado) ? err.error.equipo_asociado.join(', ') : err.error.equipo_asociado;
+          msg = `Error de asociación: ${detail}`;
+        } else if (err?.error?.detail) {
+          msg = err.error.detail;
+        }
+        alert(msg);
       }
     }
   }
