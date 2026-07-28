@@ -1408,7 +1408,18 @@ export class InventarioComponent implements OnInit {
     });
   }
 
-  incompleteCount = computed(() => this.storage.inventario().filter(i => i.creado_automaticamente).length);
+  incompleteCount = computed(() => {
+    const mode = this.viewMode();
+    const ACTIVOS_STATES = new Set(['RECIBIDO', 'ALISTAMIENTO', 'DISPONIBLE', 'ENTREGADO', 'ALMACENADO', 'EN_ESPERA_DEVOLUCION', 'PENDIENTE_DEVOLUCION']);
+    const DEVOLUCIONES_STATES = new Set(['EN_ESPERA_DEVOLUCION', 'PENDIENTE_DEVOLUCION', 'DEVUELTO']);
+    const BAJAS_STATES = new Set(['DADO_DE_BAJA']);
+    return this.storage.inventario().filter(i => {
+      if (!i.creado_automaticamente) return false;
+      return mode === 'activos' ? ACTIVOS_STATES.has(i.estado) :
+             mode === 'devoluciones' ? DEVOLUCIONES_STATES.has(i.estado) :
+             BAJAS_STATES.has(i.estado);
+    }).length;
+  });
 
   // ── Métodos: Completar Equipo Creado Automáticamente ─────────────────────
   getTiposEquipo() {
@@ -1507,19 +1518,35 @@ export class InventarioComponent implements OnInit {
 
     const filtered = items.filter(i => {
       // 1. Filter by view mode (tab)
+      const itemEstado = i.estado ? i.estado.toUpperCase() : '';
       const matchesMode =
-        mode === 'activos' ? ACTIVOS_STATES.has(i.estado) :
-          mode === 'devoluciones' ? DEVOLUCIONES_STATES.has(i.estado) :
-            BAJAS_STATES.has(i.estado);
+        mode === 'activos' ? ACTIVOS_STATES.has(itemEstado) :
+          mode === 'devoluciones' ? DEVOLUCIONES_STATES.has(itemEstado) :
+            BAJAS_STATES.has(itemEstado);
       if (!matchesMode) return false;
 
-      // 2. Text search
-      const matchesSearch = !query ||
-        i.serial.toLowerCase().includes(query) ||
-        i.marca.toLowerCase().includes(query) ||
-        i.modelo.toLowerCase().includes(query) ||
-        (i.tipo_producto && i.tipo_producto.toLowerCase().includes(query)) ||
-        (i.item && i.item.toString() === query);
+      // 2. Robust, multi-term text search
+      let matchesSearch = true;
+      const trimmedQuery = query.trim();
+      if (trimmedQuery) {
+        const terms = trimmedQuery.split(/\s+/);
+        const itemNum = i.item != null ? String(i.item) : '';
+        const serial = (i.serial || '').toLowerCase();
+        const marca = (i.marca || '').toLowerCase();
+        const modelo = (i.modelo || '').toLowerCase();
+        const tipo = (i.tipo_producto || '').toLowerCase();
+        const ubi = (i.ubicacion || '').toLowerCase();
+        const resp = (i.responsable_devolucion || '').toLowerCase();
+        const cpu = (i.procesador || '').toLowerCase();
+        const ram = (i.ram || '').toLowerCase();
+        const disco = (i.disco || '').toLowerCase();
+        const tdisco = (i.tipo_disco || '').toLowerCase();
+        const com = (i.comentarios || '').toLowerCase();
+        const estadoStr = (i.estado || '').toLowerCase();
+
+        const fullText = `${itemNum} ${serial} ${marca} ${modelo} ${tipo} ${ubi} ${resp} ${cpu} ${ram} ${disco} ${tdisco} ${com} ${estadoStr}`;
+        matchesSearch = terms.every(term => fullText.includes(term));
+      }
 
       // 3. Status sub-filter
       const matchesStatus = !status || i.estado === status;
@@ -1916,8 +1943,14 @@ export class InventarioComponent implements OnInit {
 
   getPeripherals(assetId?: number): InventarioItem[] {
     if (!assetId) return [];
+    // The backend serializer normalizes equipo_asociado to the item number of the associated
+    // equipment (if it has one), otherwise to its DB id. We must match both possibilities.
+    const mainAsset = this.storage.inventario().find(a => a._backendId === assetId);
+    const matchIds = new Set<number>([assetId]);
+    if (mainAsset?.item != null) matchIds.add(mainAsset.item);
     return this.storage.inventario().filter(a =>
-      a.equipo_asociado === assetId &&
+      a.equipo_asociado != null &&
+      matchIds.has(a.equipo_asociado) &&
       a._backendId !== assetId &&
       (a as any).id !== assetId &&
       a.item !== assetId &&
@@ -1927,7 +1960,9 @@ export class InventarioComponent implements OnInit {
 
   getAssociatedItemNumber(associatedId?: number): number | string {
     if (!associatedId) return '-';
-    const mainAsset = this.storage.inventario().find(a => a._backendId === associatedId || (a as any).id === associatedId);
+    const mainAsset = this.storage.inventario().find(a =>
+      a._backendId === associatedId || (a as any).id === associatedId || a.item === associatedId
+    );
     return mainAsset ? (mainAsset.item || '-') : '-';
   }
 
@@ -2062,7 +2097,7 @@ export class InventarioComponent implements OnInit {
       return;
     }
 
-    const targetId = computer.item || computer._backendId || (computer as any).id;
+    const targetId = computer._backendId || (computer as any).id;
     if (targetId && peripheral._backendId) {
       try {
         await firstValueFrom(this.api.updateInventarioItem(peripheral._backendId, {

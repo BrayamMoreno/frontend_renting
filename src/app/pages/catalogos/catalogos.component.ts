@@ -632,7 +632,9 @@ export class CatalogosComponent implements OnInit {
 
   addPunto() {
     if (!this.newPunto.trim()) return;
-    const orden = this.puntosAlistamiento().length + 1;
+    const puntos = this.puntosAlistamiento();
+    const maxOrden = puntos.reduce((max, p) => Math.max(max, p.orden || 0), 0);
+    const orden = maxOrden + 1;
     this.api.createPuntoAlistamiento({
       nombre: this.newPunto.trim(),
       requiere_evidencia: this.newPuntoEvidencia,
@@ -698,13 +700,18 @@ export class CatalogosComponent implements OnInit {
     return this.tipos();
   }
 
+  private cleanTextLines(text: string): string {
+    if (!text) return '';
+    return text.split('\n').map(line => line.trim()).join('\n').trim();
+  }
+
   addConfig() {
     if (this.selectedTiposConfig.length === 0 || !this.newConfigDestinatario.trim() || !this.newConfigAsunto.trim() || !this.newConfigCuerpo.trim()) return;
     const payload = {
       tipos_producto: this.selectedTiposConfig,
       destinatario: this.newConfigDestinatario.trim(),
       asunto: this.newConfigAsunto.trim(),
-      cuerpo: this.newConfigCuerpo.trim()
+      cuerpo: this.cleanTextLines(this.newConfigCuerpo)
     };
     this.api.createConfiguracionEmailBaja(payload).subscribe(() => {
       this.clearConfigForm();
@@ -727,7 +734,7 @@ export class CatalogosComponent implements OnInit {
       tipos_producto: this.selectedTiposConfig,
       destinatario: this.newConfigDestinatario.trim(),
       asunto: this.newConfigAsunto.trim(),
-      cuerpo: this.newConfigCuerpo.trim()
+      cuerpo: this.cleanTextLines(this.newConfigCuerpo)
     };
     this.api.updateConfiguracionEmailBaja(active.id, payload).subscribe(() => {
       this.clearConfigForm();

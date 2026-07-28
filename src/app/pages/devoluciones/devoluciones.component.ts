@@ -287,6 +287,26 @@ import { firstValueFrom } from 'rxjs';
       </div>
     </div>
 
+    <!-- Custom Application Notice Modal -->
+    <div *ngIf="appNoticeModal()" class="fixed inset-0 z-[115] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+      <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 text-center animate-in zoom-in-95 duration-300">
+        <div class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+             [class.bg-amber-100]="appNoticeModal()?.type === 'warning'"
+             [class.text-amber-600]="appNoticeModal()?.type === 'warning'"
+             [class.bg-blue-100]="appNoticeModal()?.type === 'info'"
+             [class.text-blue-600]="appNoticeModal()?.type === 'info'"
+             [class.bg-red-100]="appNoticeModal()?.type === 'error'"
+             [class.text-red-600]="appNoticeModal()?.type === 'error'">
+          <mat-icon class="scale-150">{{ appNoticeModal()?.icon || 'info' }}</mat-icon>
+        </div>
+        <h3 class="text-xl font-bold text-slate-800 mb-2">{{ appNoticeModal()?.title }}</h3>
+        <p class="text-sm text-slate-600 mb-6 font-medium leading-relaxed">{{ appNoticeModal()?.message }}</p>
+        <button (click)="closeAppNoticeModal()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl transition-all shadow-md">
+          Entendido
+        </button>
+      </div>
+    </div>
+
     <!-- Contenido Principal Animado -->
     <div class="max-w-4xl mx-auto space-y-8 animate-in slide-in-from-left duration-500">
       <div class="flex flex-col gap-1">
@@ -502,6 +522,11 @@ export class DevolucionesComponent implements OnInit {
   discos = signal<string[]>([]);
   validationError = signal('');
   isCreatingEquip = signal(false);
+  appNoticeModal = signal<{ title: string; message: string; type: 'info' | 'warning' | 'error'; icon?: string } | null>(null);
+
+  closeAppNoticeModal() {
+    this.appNoticeModal.set(null);
+  }
 
   ngOnInit() {
     if (!this.auth.hasPermission('generar_devolucion') && this.auth.hasPermission('aprobar_devolucion')) {
@@ -649,9 +674,19 @@ export class DevolucionesComponent implements OnInit {
     }
 
     if (alreadyInListCount > 0 && items.length === alreadyInListCount + propiosCount) {
-      alert('El equipo (o equipos) ya está en la lista de devolución.');
+      this.appNoticeModal.set({
+        title: 'Equipo Ya Agregado',
+        message: 'El equipo (o equipos) seleccionados ya se encuentran agregados en la lista de devolución.',
+        type: 'info',
+        icon: 'info'
+      });
     } else if (propiosCount > 0) {
-      alert(`Se omitieron ${propiosCount} equipo(s) porque son propios y no se devuelven al proveedor.`);
+      this.appNoticeModal.set({
+        title: 'Equipos Propios Omitidos',
+        message: `Se omitieron ${propiosCount} equipo(s) porque son propios de la empresa y no requieren devolución al proveedor.`,
+        type: 'warning',
+        icon: 'inventory_2'
+      });
     }
   }
 

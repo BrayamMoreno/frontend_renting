@@ -295,12 +295,19 @@ export class HistorialEntregasComponent implements OnInit {
     let data = this.recepciones();
     const q = this.searchQuery.toLowerCase().trim();
     if (q) {
-      data = data.filter(r =>
-        r.entregador_nombre?.toLowerCase().includes(q) ||
-        r.entregador_cedula?.toLowerCase().includes(q) ||
-        r.proveedor_nombre?.toLowerCase().includes(q) ||
-        r.receptor_nombre?.toLowerCase().includes(q)
-      );
+      const terms = q.split(/\s+/);
+      data = data.filter(r => {
+        const entNombre = (r.entregador_nombre || '').toLowerCase();
+        const entCedula = (r.entregador_cedula || '').toLowerCase();
+        const prov = (r.proveedor_nombre || '').toLowerCase();
+        const rec = (r.receptor_nombre || '').toLowerCase();
+        const equiposText = (r.equipos || []).map((eq: any) =>
+          `${eq.item || ''} ${eq.serial || ''} ${eq.marca || ''} ${eq.modelo || ''} ${eq.tipo_producto || ''}`
+        ).join(' ').toLowerCase();
+
+        const fullText = `${entNombre} ${entCedula} ${prov} ${rec} ${equiposText}`;
+        return terms.every(term => fullText.includes(term));
+      });
     }
     if (this.proveedorFilter) {
       data = data.filter(r => r.proveedor_nombre === this.proveedorFilter);

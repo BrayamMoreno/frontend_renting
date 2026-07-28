@@ -186,7 +186,7 @@ import { InventarioItem } from '../../models/app-state';
                     </div>
                   </td>
                   <td class="px-4 py-3" *ngIf="activeTabDev() === 'propios'">
-                    <button (click)="storeOwnAsset(item)"
+                    <button (click)="openStoreOwnAssetModal(item)"
                             class="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs border border-emerald-200 transition-all">
                       <mat-icon class="scale-75">archive</mat-icon> Almacenar
                     </button>
@@ -307,6 +307,49 @@ import { InventarioItem } from '../../models/app-state';
         </div>
       </div>
 
+      <!-- Modal Confirmación Almacenar Equipo Propio -->
+      <div *ngIf="selectedItemForStorage()" class="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-300">
+          <div class="p-6 text-white text-center bg-gradient-to-br from-emerald-600 to-teal-700">
+            <div class="w-16 h-16 bg-white/20 rounded-2xl rotate-6 flex items-center justify-center mx-auto mb-3 shadow-lg">
+              <mat-icon class="scale-[1.8] -rotate-6">archive</mat-icon>
+            </div>
+            <h3 class="text-xl font-black mb-1">Almacenar Equipo Propio</h3>
+            <p class="text-emerald-100 text-xs font-medium">Confirmación de almacenamiento en bodega</p>
+          </div>
+
+          <div class="p-6 text-center space-y-4">
+            <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-left space-y-2">
+              <p class="text-xs text-slate-500 font-bold uppercase tracking-wider">Detalles del Equipo</p>
+              <p class="text-sm font-bold text-slate-800">{{ selectedItemForStorage()?.marca }} {{ selectedItemForStorage()?.modelo }}</p>
+              <div class="flex items-center justify-between text-xs text-slate-600 font-mono pt-1 border-t border-slate-200/60">
+                <span>Serial: <strong>{{ selectedItemForStorage()?.serial }}</strong></span>
+                <span *ngIf="selectedItemForStorage()?.item">Ítem: <strong>#{{ selectedItemForStorage()?.item }}</strong></span>
+              </div>
+            </div>
+
+            <p class="text-slate-600 text-xs leading-relaxed">
+              ¿Confirmas el cambio de estado a <strong>ALMACENADO</strong>? El equipo quedará disponible en bodega para futuras asignaciones.
+            </p>
+
+            <div class="flex gap-3 pt-2">
+              <button (click)="closeStoreOwnAssetModal()" 
+                      [disabled]="isStoringAsset()"
+                      class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl font-bold transition-all disabled:opacity-50">
+                Cancelar
+              </button>
+              <button (click)="executeStoreOwnAsset()" 
+                      [disabled]="isStoringAsset()"
+                      class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                <div *ngIf="isStoringAsset()" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <mat-icon class="scale-90" *ngIf="!isStoringAsset()">archive</mat-icon>
+                {{ isStoringAsset() ? 'Almacenando...' : 'Confirmar' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   `
 })
@@ -355,11 +398,27 @@ export class PendientesDevolucionComponent implements OnInit {
     return items.filter(item => {
       const matchesTab = tab === 'propios' ? (item.es_propio === true) : (!item.es_propio);
 
-      const matchesSearch = !query ||
-        item.serial.toLowerCase().includes(query) ||
-        item.marca.toLowerCase().includes(query) ||
-        item.modelo.toLowerCase().includes(query) ||
-        (item.tipo_producto && item.tipo_producto.toLowerCase().includes(query));
+      let matchesSearch = true;
+      const trimmedQuery = query.trim();
+      if (trimmedQuery) {
+        const terms = trimmedQuery.split(/\s+/);
+        const itemNum = item.item != null ? String(item.item) : '';
+        const serial = (item.serial || '').toLowerCase();
+        const marca = (item.marca || '').toLowerCase();
+        const modelo = (item.modelo || '').toLowerCase();
+        const tipo = (item.tipo_producto || '').toLowerCase();
+        const ubi = (item.ubicacion || '').toLowerCase();
+        const resp = (item.responsable_devolucion || '').toLowerCase();
+        const cpu = (item.procesador || '').toLowerCase();
+        const ram = (item.ram || '').toLowerCase();
+        const disco = (item.disco || '').toLowerCase();
+        const tdisco = (item.tipo_disco || '').toLowerCase();
+        const com = (item.comentarios || '').toLowerCase();
+        const estadoStr = (item.estado || '').toLowerCase();
+
+        const fullText = `${itemNum} ${serial} ${marca} ${modelo} ${tipo} ${ubi} ${resp} ${cpu} ${ram} ${disco} ${tdisco} ${com} ${estadoStr}`;
+        matchesSearch = terms.every(term => fullText.includes(term));
+      }
 
       const matchesUbi = !ubi || item.ubicacion === ubi;
       const matchesResp = !resp || item.responsable_devolucion === resp;
@@ -496,15 +555,30 @@ export class PendientesDevolucionComponent implements OnInit {
     await this.storage.marcarTodasAlertsLeidas();
   }
 
-  async storeOwnAsset(item: any) {
-    if (confirm(`¿Confirmar almacenamiento en bodega del equipo propio ${item.marca} ${item.modelo} (${item.serial})?`)) {
-      try {
-        await firstValueFrom(this.api.updateInventarioItem(item.id || item._backendId, { estado: 'ALMACENADO' }));
-        await this.cargarDatos();
-      } catch (e) {
-        console.error('Error al almacenar equipo propio:', e);
-        alert('Hubo un error al almacenar el equipo.');
-      }
+  selectedItemForStorage = signal<any | null>(null);
+  isStoringAsset = signal<boolean>(false);
+
+  openStoreOwnAssetModal(item: any) {
+    this.selectedItemForStorage.set(item);
+  }
+
+  closeStoreOwnAssetModal() {
+    this.selectedItemForStorage.set(null);
+  }
+
+  async executeStoreOwnAsset() {
+    const item = this.selectedItemForStorage();
+    if (!item) return;
+
+    this.isStoringAsset.set(true);
+    try {
+      await firstValueFrom(this.api.updateInventarioItem(item.id || item._backendId, { estado: 'ALMACENADO' }));
+      await this.cargarDatos();
+      this.closeStoreOwnAssetModal();
+    } catch (e) {
+      console.error('Error al almacenar equipo propio:', e);
+    } finally {
+      this.isStoringAsset.set(false);
     }
   }
 

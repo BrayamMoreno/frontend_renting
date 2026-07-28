@@ -334,9 +334,10 @@ export class StorageService {
 
       // 2. Crear cada equipo vinculado a esa recepción (paso 1: enviar sin asociaciones provisionales locales)
       const equipoPromises = recepcion.equipos.map(equipo => {
-        // Si equipo_asociado corresponde a un ID real en la base de datos (ya existente), lo enviamos tal cual.
-        // Si no, asumimos que es una asociación provisional por número de ítem local y lo dejamos como null para resolverlo después.
-        const isDbId = equipo.equipo_asociado ? Object.values(currentState.inventario).some(a => a._backendId === equipo.equipo_asociado) : false;
+        // Verificar si equipo_asociado corresponde al número de ítem de un equipo creado en esta misma recepción
+        const isLocalAssociation = equipo.equipo_asociado ? recepcion.equipos.some(e => Number(e.item) === Number(equipo.equipo_asociado)) : false;
+        // Si equipo_asociado corresponde a un ID real en la base de datos (ya existente) y NO es una asociación local
+        const isDbId = (equipo.equipo_asociado && !isLocalAssociation) ? Object.values(currentState.inventario).some(a => a._backendId === equipo.equipo_asociado) : false;
 
         const itemPayload: InventarioItemPayload = {
           item: equipo.item,
@@ -374,8 +375,9 @@ export class StorageService {
       const resolvedEquiposPromises = createdEquipos.map(async (createdItem: any) => {
         const original = recepcion.equipos.find(e => e.serial === createdItem.serial);
         if (original && original.equipo_asociado) {
-          const isDbId = Object.values(currentState.inventario).some(a => a._backendId === original.equipo_asociado);
-          if (!isDbId) {
+          const isLocalAssociation = recepcion.equipos.some(e => Number(e.item) === Number(original.equipo_asociado));
+          const isDbId = !isLocalAssociation && Object.values(currentState.inventario).some(a => a._backendId === original.equipo_asociado);
+          if (!isDbId || isLocalAssociation) {
             const realId = itemToIdMap.get(Number(original.equipo_asociado));
             if (realId) {
               const updated = await firstValueFrom(this.api.updateInventarioItem(createdItem.id, { equipo_asociado: realId }));
@@ -526,48 +528,48 @@ export class StorageService {
       if (asset.es_cambio && asset.cambio_por) {
         const itemNumStr = String(asset.cambio_por).trim();
         const itemNum = Number(itemNumStr);
-        if (!isNaN(itemNum)) {
-          const oldAsset = Object.values(currentState.inventario).find(
-            (a: any) => a.item === itemNum &&
-              (a.estado === 'EN_ESPERA_DEVOLUCION' || a.estado === 'PENDIENTE_DEVOLUCION')
-          ) as any;
-          if (oldAsset?._backendId) {
-            // Actualizar responsable en backend
-            await firstValueFrom(this.api.updateInventarioItem(
-              oldAsset._backendId,
-              { responsable_devolucion: tecnicoNombre }
-            ));
-            // Actualizar cache local del equipo viejo
-            updatedInventario[oldAsset.serial] = {
-              ...updatedInventario[oldAsset.serial],
-              responsable_devolucion: tecnicoNombre
-            };
+        // BUG-7 FIX: soporta cambio_por como número de ítem O como serial de texto
+        const oldAsset = Object.values(currentState.inventario).find((a: any) =>
+          (a.estado === 'EN_ESPERA_DEVOLUCION' || a.estado === 'PENDIENTE_DEVOLUCION') &&
+          ((!isNaN(itemNum) && a.item === itemNum) ||
+           (isNaN(itemNum) && a.serial && a.serial.toUpperCase() === itemNumStr.toUpperCase()))
+        ) as any;
+        if (oldAsset?._backendId) {
+          // Actualizar responsable en backend
+          await firstValueFrom(this.api.updateInventarioItem(
+            oldAsset._backendId,
+            { responsable_devolucion: tecnicoNombre }
+          ));
+          // Actualizar cache local del equipo viejo
+          updatedInventario[oldAsset.serial] = {
+            ...updatedInventario[oldAsset.serial],
+            responsable_devolucion: tecnicoNombre
+          };
 
-            // Actualizar responsable_devolucion en periféricos asociados al equipo viejo
-            const isPeripheralItem = (item: any): boolean => {
-              if (!item || !item.tipo_producto) return false;
-              const tp = this.tiposProducto().find((t: any) => t.nombre.toUpperCase() === String(item.tipo_producto).toUpperCase());
-              return tp ? !!tp.es_periferico : false;
-            };
+          // Actualizar responsable_devolucion en periféricos asociados al equipo viejo
+          const isPeripheralItem = (item: any): boolean => {
+            if (!item || !item.tipo_producto) return false;
+            const tp = this.tiposProducto().find((t: any) => t.nombre.toUpperCase() === String(item.tipo_producto).toUpperCase());
+            return tp ? !!tp.es_periferico : false;
+          };
 
-            const associatedPeripherals = Object.values(currentState.inventario).filter(
-              (a: any) => isPeripheralItem(a) && (
-                (a.equipo_asociado === oldAsset._backendId || a.equipo_asociado === oldAsset.item) ||
-                (a.es_cambio && String(a.cambio_por).trim() === itemNumStr)
-              )
-            );
-            for (const periph of associatedPeripherals) {
-              if (periph._backendId) {
-                await firstValueFrom(this.api.updateInventarioItem(
-                  periph._backendId,
-                  { responsable_devolucion: tecnicoNombre }
-                ));
-                if (updatedInventario[periph.serial]) {
-                  updatedInventario[periph.serial] = {
-                    ...updatedInventario[periph.serial],
-                    responsable_devolucion: tecnicoNombre
-                  };
-                }
+          const associatedPeripherals = Object.values(currentState.inventario).filter(
+            (a: any) => isPeripheralItem(a) && (
+              (a.equipo_asociado === oldAsset._backendId || a.equipo_asociado === oldAsset.item) ||
+              (a.es_cambio && String(a.cambio_por).trim() === itemNumStr)
+            )
+          );
+          for (const periph of associatedPeripherals) {
+            if (periph._backendId) {
+              await firstValueFrom(this.api.updateInventarioItem(
+                periph._backendId,
+                { responsable_devolucion: tecnicoNombre }
+              ));
+              if (updatedInventario[periph.serial]) {
+                updatedInventario[periph.serial] = {
+                  ...updatedInventario[periph.serial],
+                  responsable_devolucion: tecnicoNombre
+                };
               }
             }
           }
@@ -609,89 +611,90 @@ export class StorageService {
       if (asset?.es_cambio && asset?.cambio_por) {
         const itemNumStr = String(asset.cambio_por).trim();
         const itemNum = Number(itemNumStr);
-        if (!isNaN(itemNum)) {
-          const oldAsset = Object.values(currentState.inventario).find(
-            (a: any) => a.item === itemNum
-          ) as any;
-          if (oldAsset?._backendId) {
-            // Actualizar estado y responsable en backend
-            await firstValueFrom(this.api.updateInventarioItem(
-              oldAsset._backendId,
-              { 
-                estado: 'EN_ESPERA_DEVOLUCION',
-                responsable_devolucion: alistamiento.tecnico_nombre,
-                fecha_inicio_reemplazo: new Date().toISOString(),
-                equipo_reemplazante_serial: alistamiento.serial
-              }
-            ));
-            // Actualizar cache local del equipo viejo
-            updatedInventario[oldAsset.serial] = {
-              ...updatedInventario[oldAsset.serial],
+        // BUG-7 FIX: soporta cambio_por como número de ítem O como serial de texto
+        const oldAsset = Object.values(currentState.inventario).find((a: any) =>
+          (!isNaN(itemNum) && a.item === itemNum) ||
+          (isNaN(itemNum) && a.serial && a.serial.toUpperCase() === itemNumStr.toUpperCase())
+        ) as any;
+        if (oldAsset?._backendId) {
+          // Actualizar estado y responsable en backend
+          await firstValueFrom(this.api.updateInventarioItem(
+            oldAsset._backendId,
+            {
               estado: 'EN_ESPERA_DEVOLUCION',
               responsable_devolucion: alistamiento.tecnico_nombre,
               fecha_inicio_reemplazo: new Date().toISOString(),
               equipo_reemplazante_serial: alistamiento.serial
-            };
+            }
+          ));
+          // Actualizar cache local del equipo viejo
+          updatedInventario[oldAsset.serial] = {
+            ...updatedInventario[oldAsset.serial],
+            estado: 'EN_ESPERA_DEVOLUCION',
+            responsable_devolucion: alistamiento.tecnico_nombre,
+            fecha_inicio_reemplazo: new Date().toISOString(),
+            equipo_reemplazante_serial: alistamiento.serial
+          };
 
-            // Actualizar responsable_devolucion y reasociar periféricos vinculados al equipo viejo
-            const isPeripheralItem = (item: any): boolean => {
-              if (!item || !item.tipo_producto) return false;
-              const tp = this.tiposProducto().find((t: any) => t.nombre.toUpperCase() === String(item.tipo_producto).toUpperCase());
-              return tp ? !!tp.es_periferico : false;
-            };
+          // Actualizar responsable_devolucion y reasociar periféricos vinculados al equipo viejo
+          const isPeripheralItem = (item: any): boolean => {
+            if (!item || !item.tipo_producto) return false;
+            const tp = this.tiposProducto().find((t: any) => t.nombre.toUpperCase() === String(item.tipo_producto).toUpperCase());
+            return tp ? !!tp.es_periferico : false;
+          };
 
-            const associatedPeripherals = Object.values(currentState.inventario).filter(
-              (a: any) => isPeripheralItem(a) && (
-                (a.equipo_asociado === oldAsset._backendId || a.equipo_asociado === oldAsset.item) ||
-                (a.es_cambio && String(a.cambio_por).trim() === itemNumStr)
-              )
-            );
-            for (const periph of associatedPeripherals) {
-              if (periph._backendId) {
-                const isPendingDevolucion = periph.estado === 'EN_ESPERA_DEVOLUCION' ||
-                  periph.estado === 'PENDIENTE_DEVOLUCION' ||
-                  periph.estado === 'DEVUELTO' ||
-                  periph.estado === 'DADO_DE_BAJA';
-                const periphUpdatePayload: any = {
-                  responsable_devolucion: alistamiento.tecnico_nombre
+          const associatedPeripherals = Object.values(currentState.inventario).filter(
+            (a: any) => isPeripheralItem(a) && (
+              (a.equipo_asociado === oldAsset._backendId || a.equipo_asociado === oldAsset.item) ||
+              (a.es_cambio && String(a.cambio_por).trim() === itemNumStr)
+            )
+          );
+          for (const periph of associatedPeripherals) {
+            if (periph._backendId) {
+              const isPendingDevolucion = periph.estado === 'EN_ESPERA_DEVOLUCION' ||
+                periph.estado === 'PENDIENTE_DEVOLUCION' ||
+                periph.estado === 'DEVUELTO' ||
+                periph.estado === 'DADO_DE_BAJA';
+              const periphUpdatePayload: any = {
+                responsable_devolucion: alistamiento.tecnico_nombre
+              };
+              if (asset._backendId && !isPendingDevolucion) {
+                // Enviar el DB id; el serializer lo normaliza al item number
+                periphUpdatePayload.equipo_asociado = asset._backendId;
+              }
+              await firstValueFrom(this.api.updateInventarioItem(
+                periph._backendId,
+                periphUpdatePayload
+              ));
+              if (updatedInventario[periph.serial]) {
+                updatedInventario[periph.serial] = {
+                  ...updatedInventario[periph.serial],
+                  responsable_devolucion: alistamiento.tecnico_nombre,
+                  ...((asset._backendId && !isPendingDevolucion) ? { equipo_asociado: asset._backendId } : {})
                 };
-                if (asset.item && !isPendingDevolucion) {
-                  periphUpdatePayload.equipo_asociado = asset.item;
-                }
-                await firstValueFrom(this.api.updateInventarioItem(
-                  periph._backendId,
-                  periphUpdatePayload
-                ));
-                if (updatedInventario[periph.serial]) {
-                  updatedInventario[periph.serial] = {
-                    ...updatedInventario[periph.serial],
-                    responsable_devolucion: alistamiento.tecnico_nombre,
-                    ...((asset.item && !isPendingDevolucion) ? { equipo_asociado: asset.item } : {})
-                  };
-                }
               }
             }
-          } else {
-            // Crear nuevo registro (ghost) con estado EN_ESPERA_DEVOLUCION y responsable
-            const ghostPayload: InventarioItemPayload = {
-              item: itemNum,
-              serial: `CAMBIO-${itemNumStr}-${Date.now()}`,
-              marca: 'NO REGISTRADA',
-              modelo: 'NO REGISTRADO',
-              estado: 'EN_ESPERA_DEVOLUCION',
-              responsable_devolucion: alistamiento.tecnico_nombre,
-              fecha_inicio_reemplazo: new Date().toISOString(),
-              equipo_reemplazante_serial: alistamiento.serial,
-              comentarios: `Creado automáticamente por alistamiento de equipo de cambio (Reemplazado por ${alistamiento.serial})`
-            };
-            const createdGhost = await firstValueFrom(this.api.createInventarioItem(ghostPayload));
-            updatedInventario[createdGhost.serial] = {
-              ...createdGhost,
-              id_recepcion_origen: '',
-              fecha_ingreso: createdGhost.fecha_ingreso || new Date().toISOString(),
-              _backendId: createdGhost.id
-            } as any;
           }
+        } else {
+          // Crear nuevo registro (ghost) con estado EN_ESPERA_DEVOLUCION y responsable
+          const ghostPayload: InventarioItemPayload = {
+            item: !isNaN(itemNum) ? itemNum : undefined,
+            serial: `CAMBIO-${itemNumStr}-${Date.now()}`,
+            marca: 'NO REGISTRADA',
+            modelo: 'NO REGISTRADO',
+            estado: 'EN_ESPERA_DEVOLUCION',
+            responsable_devolucion: alistamiento.tecnico_nombre,
+            fecha_inicio_reemplazo: new Date().toISOString(),
+            equipo_reemplazante_serial: alistamiento.serial,
+            comentarios: `Creado automáticamente por alistamiento de equipo de cambio (Reemplazado por ${alistamiento.serial})`
+          };
+          const createdGhost = await firstValueFrom(this.api.createInventarioItem(ghostPayload));
+          updatedInventario[createdGhost.serial] = {
+            ...createdGhost,
+            id_recepcion_origen: '',
+            fecha_ingreso: createdGhost.fecha_ingreso || new Date().toISOString(),
+            _backendId: createdGhost.id
+          } as any;
         }
       }
 
@@ -764,10 +767,14 @@ export class StorageService {
 
       const matchId = match._backendId || (match as any).id;
 
-      // Buscar periféricos asociados a este activo principal (usando ID de base de datos)
-      if (matchId) {
+      // BUG-1 FIX: Buscar periféricos asociados usando tanto _backendId como item number.
+      // El backend normaliza equipo_asociado al item number del equipo cuando existe.
+      if (matchId != null || match.item != null) {
+        const matchIds = new Set<number>();
+        if (matchId != null) matchIds.add(matchId);
+        if (match.item != null) matchIds.add(match.item);
         inventario.forEach(a => {
-          if (a.equipo_asociado === matchId) {
+          if (a.equipo_asociado != null && matchIds.has(a.equipo_asociado)) {
             resultsMap.set(a.serial, a);
           }
         });
@@ -775,16 +782,24 @@ export class StorageService {
 
       // Si este activo es un periférico y está asociado a un equipo principal
       if (match.equipo_asociado) {
-        // Encontrar el equipo principal por ID
-        const mainEquip = inventario.find(a => a._backendId === match.equipo_asociado || (a as any).id === match.equipo_asociado);
+        // Encontrar el equipo principal por _backendId, DB id, o item number
+        const mainEquip = inventario.find(a =>
+          a._backendId === match.equipo_asociado ||
+          (a as any).id === match.equipo_asociado ||
+          a.item === match.equipo_asociado
+        );
         if (mainEquip) {
           resultsMap.set(mainEquip.serial, mainEquip);
-          
+
           // También encontrar otros periféricos hermanos asociados al mismo equipo principal
           const mainEquipId = mainEquip._backendId || (mainEquip as any).id;
-          if (mainEquipId) {
+          const mainEquipItem = mainEquip.item;
+          const siblingIds = new Set<number>();
+          if (mainEquipId != null) siblingIds.add(mainEquipId);
+          if (mainEquipItem != null) siblingIds.add(mainEquipItem);
+          if (siblingIds.size > 0) {
             inventario.forEach(a => {
-              if (a.equipo_asociado === mainEquipId) {
+              if (a.equipo_asociado != null && siblingIds.has(a.equipo_asociado)) {
                 resultsMap.set(a.serial, a);
               }
             });

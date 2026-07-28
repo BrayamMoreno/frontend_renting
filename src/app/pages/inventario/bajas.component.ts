@@ -611,13 +611,28 @@ export class BajasComponent implements OnInit {
       // 1. Filter only written-off items (DADO_DE_BAJA)
       if (i.estado !== 'DADO_DE_BAJA') return false;
 
-      // 2. Text search
-      const matchesSearch = !query ||
-        i.serial.toLowerCase().includes(query) ||
-        i.marca.toLowerCase().includes(query) ||
-        i.modelo.toLowerCase().includes(query) ||
-        (i.tipo_producto && i.tipo_producto.toLowerCase().includes(query)) ||
-        (i.item && i.item.toString() === query);
+      // 2. Robust, multi-term text search
+      let matchesSearch = true;
+      const trimmedQuery = query.trim();
+      if (trimmedQuery) {
+        const terms = trimmedQuery.split(/\s+/);
+        const itemNum = i.item != null ? String(i.item) : '';
+        const serial = (i.serial || '').toLowerCase();
+        const marca = (i.marca || '').toLowerCase();
+        const modelo = (i.modelo || '').toLowerCase();
+        const tipo = (i.tipo_producto || '').toLowerCase();
+        const ubi = (i.ubicacion || '').toLowerCase();
+        const resp = (i.responsable_devolucion || '').toLowerCase();
+        const cpu = (i.procesador || '').toLowerCase();
+        const ram = (i.ram || '').toLowerCase();
+        const disco = (i.disco || '').toLowerCase();
+        const tdisco = (i.tipo_disco || '').toLowerCase();
+        const com = (i.comentarios || '').toLowerCase();
+        const estadoStr = (i.estado || '').toLowerCase();
+
+        const fullText = `${itemNum} ${serial} ${marca} ${modelo} ${tipo} ${ubi} ${resp} ${cpu} ${ram} ${disco} ${tdisco} ${com} ${estadoStr}`;
+        matchesSearch = terms.every(term => fullText.includes(term));
+      }
 
       // 3. Propio / Rentado filter
       const matchesPropio =
@@ -832,8 +847,14 @@ export class BajasComponent implements OnInit {
 
   getPeripherals(assetId: number | undefined): InventarioItem[] {
     if (!assetId) return [];
+    // The backend serializer normalizes equipo_asociado to the item number of the associated
+    // equipment (if it has one), otherwise to its DB id. We must match both possibilities.
+    const mainAsset = this.storage.inventario().find(a => a._backendId === assetId);
+    const matchIds = new Set<number>([assetId]);
+    if (mainAsset?.item != null) matchIds.add(mainAsset.item);
     return this.storage.inventario().filter(a =>
-      a.equipo_asociado === assetId &&
+      a.equipo_asociado != null &&
+      matchIds.has(a.equipo_asociado) &&
       a._backendId !== assetId &&
       (a as any).id !== assetId &&
       a.item !== assetId &&
@@ -843,7 +864,9 @@ export class BajasComponent implements OnInit {
 
   getAssociatedItemNumber(associatedId: number | undefined): number | string {
     if (!associatedId) return '-';
-    const mainAsset = this.storage.inventario().find(a => a._backendId === associatedId || (a as any).id === associatedId);
+    const mainAsset = this.storage.inventario().find(a =>
+      a._backendId === associatedId || (a as any).id === associatedId || a.item === associatedId
+    );
     return mainAsset ? (mainAsset.item || '-') : '-';
   }
 

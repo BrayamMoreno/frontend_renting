@@ -1038,7 +1038,7 @@ export class IngresoComponent implements OnInit {
       return;
     }
     this.selectedAsociarAssetObj = asset;
-    this.newPeripheral.equipo_asociado = asset._backendId || asset.id || asset.item;
+    this.newPeripheral.equipo_asociado = asset.isLocal ? asset.item : (asset._backendId || asset.id || asset.item);
     this.newPeripheral.ubicacion = asset.ubicacion;
     this.searchAsociarText = `${asset.item} - ${asset.marca} ${asset.modelo} (${asset.serial})`;
     this.searchAsociarQuery.set('');
@@ -1520,85 +1520,63 @@ export class IngresoComponent implements OnInit {
     // ── Validar asociación antes de agregar ──
     const equipAsociado = this.newPeripheral.equipo_asociado ? Number(this.newPeripheral.equipo_asociado) : null;
     if (equipAsociado) {
-      const isDbId = this.storage.inventario().some(a => a._backendId === equipAsociado || (a as any).id === equipAsociado);
-      
-      if (isDbId) {
-        const dbAsset = this.storage.inventario().find(a => a._backendId === equipAsociado || (a as any).id === equipAsociado);
-        if (dbAsset) {
-          const tipoObj = this.tiposProductoFull().find(t => t.nombre.toUpperCase() === dbAsset.tipo_producto?.toUpperCase());
-          if (tipoObj?.es_periferico) {
-            this.validationError.set('Un periférico solo puede asociarse a un equipo de cómputo, no a otro periférico.');
-            return;
-          }
-          if (dbAsset.estado === 'DADO_DE_BAJA') {
-            this.validationError.set('No se puede asociar el periférico porque el equipo seleccionado está dado de baja.');
-            return;
-          }
-          if (dbAsset.estado === 'DEVUELTO' || dbAsset.estado === 'PENDIENTE_DEVOLUCION' || dbAsset.estado === 'EN_ESPERA_DEVOLUCION') {
-            this.validationError.set(`No se puede asociar el periférico porque el equipo seleccionado está en estado de devolución (${dbAsset.estado}).`);
-            return;
-          }
-          this.newPeripheral.ubicacion = dbAsset.ubicacion;
+      let targetAsset: any = null;
+
+      // 1. Si hay un objeto seleccionado explícitamente y coincide con equipAsociado
+      if (this.selectedAsociarAssetObj) {
+        const matchesLocal = this.selectedAsociarAssetObj.isLocal && Number(this.selectedAsociarAssetObj.item) === equipAsociado;
+        const matchesDb = !this.selectedAsociarAssetObj.isLocal && (
+          this.selectedAsociarAssetObj._backendId === equipAsociado ||
+          (this.selectedAsociarAssetObj as any).id === equipAsociado ||
+          Number(this.selectedAsociarAssetObj.item) === equipAsociado
+        );
+        if (matchesLocal || matchesDb) {
+          targetAsset = this.selectedAsociarAssetObj;
+        }
+      }
+
+      // 2. Si no coincide con selectedAsociarAssetObj, buscar en la lista local de equipos de la recepción
+      if (!targetAsset) {
+        targetAsset = this.equipmentList().find(a => Number(a.item) === equipAsociado);
+      }
+
+      // 3. Si tampoco está en la lista local, buscar en la base de datos de inventario
+      if (!targetAsset) {
+        targetAsset = this.storage.inventario().find(a =>
+          a._backendId === equipAsociado ||
+          (a as any).id === equipAsociado ||
+          Number(a.item) === equipAsociado
+        );
+      }
+
+      if (targetAsset) {
+        const tipoObj = this.tiposProductoFull().find(t => t.nombre.toUpperCase() === targetAsset.tipo_producto?.toUpperCase());
+        if (tipoObj?.es_periferico) {
+          this.validationError.set('Un periférico solo puede asociarse a un equipo de cómputo, no a otro periférico.');
+          return;
+        }
+        if (targetAsset.estado === 'DADO_DE_BAJA') {
+          this.validationError.set('No se puede asociar el periférico porque el equipo seleccionado está dado de baja.');
+          return;
+        }
+        if (targetAsset.estado === 'DEVUELTO' || targetAsset.estado === 'PENDIENTE_DEVOLUCION' || targetAsset.estado === 'EN_ESPERA_DEVOLUCION') {
+          this.validationError.set(`No se puede asociar el periférico porque el equipo seleccionado está en estado de devolución (${targetAsset.estado}).`);
+          return;
+        }
+        this.newPeripheral.ubicacion = targetAsset.ubicacion;
+        const dbId = targetAsset._backendId || targetAsset.id;
+        if (dbId && !targetAsset.isLocal) {
+          this.newPeripheral.equipo_asociado = dbId;
+        } else {
+          this.newPeripheral.equipo_asociado = targetAsset.item;
         }
       } else {
-        if (this.selectedAsociarAssetObj && Number(this.selectedAsociarAssetObj.item) === equipAsociado) {
-          const tipoObj = this.tiposProductoFull().find(t => t.nombre.toUpperCase() === this.selectedAsociarAssetObj.tipo_producto?.toUpperCase());
-          if (tipoObj?.es_periferico) {
-            this.validationError.set('Un periférico solo puede asociarse a un equipo de cómputo, no a otro periférico.');
-            return;
-          }
-          if (this.selectedAsociarAssetObj.estado === 'DADO_DE_BAJA') {
-            this.validationError.set('No se puede asociar el periférico porque el equipo seleccionado está dado de baja.');
-            return;
-          }
-          if (this.selectedAsociarAssetObj.estado === 'DEVUELTO' || this.selectedAsociarAssetObj.estado === 'PENDIENTE_DEVOLUCION' || this.selectedAsociarAssetObj.estado === 'EN_ESPERA_DEVOLUCION') {
-            this.validationError.set(`No se puede asociar el periférico porque el equipo seleccionado está en estado de devolución (${this.selectedAsociarAssetObj.estado}).`);
-            return;
-          }
-          this.newPeripheral.ubicacion = this.selectedAsociarAssetObj.ubicacion;
-          const dbId = this.selectedAsociarAssetObj._backendId || this.selectedAsociarAssetObj.id;
-          if (dbId) {
-            this.newPeripheral.equipo_asociado = dbId;
-          } else {
-            this.newPeripheral.equipo_asociado = this.selectedAsociarAssetObj.item;
-          }
-        } else {
-          // Buscar en inventario existente y en la lista local de equipos
-          const inInventario = this.storage.inventario().filter(a => a.item === equipAsociado);
-          const inLocalEquip = this.equipmentList().filter(a => Number(a.item) === equipAsociado);
-          const allMatches = [...inInventario, ...inLocalEquip];
-
-          if (allMatches.length === 0) {
-            // No existe → mostrar formulario de creación
-            this.pendingPeripheral = { ...this.newPeripheral, item: this.newPeripheral.item || (this.peripheralsList().length + 1) };
-            this.newEquipForAssociation = { item: equipAsociado, serial: '', marca: '', modelo: '', tipo_producto: '', ubicacion: '', anotacion_recepcion: '' };
-            this.popupMode = 'asociar';
-            this.showCreateEquipForm = true;
-            return;
-          } else {
-            const selected = allMatches[0] as any;
-            const tipoObj = this.tiposProductoFull().find(t => t.nombre.toUpperCase() === selected.tipo_producto?.toUpperCase());
-            if (tipoObj?.es_periferico) {
-              this.validationError.set('Un periférico solo puede asociarse a un equipo de cómputo, no a otro periférico.');
-              return;
-            }
-            if (selected.estado === 'DADO_DE_BAJA') {
-              this.validationError.set('No se puede asociar el periférico porque el equipo seleccionado está dado de baja.');
-              return;
-            }
-            if (selected.estado === 'DEVUELTO' || selected.estado === 'PENDIENTE_DEVOLUCION' || selected.estado === 'EN_ESPERA_DEVOLUCION') {
-              this.validationError.set(`No se puede asociar el periférico porque el equipo seleccionado está en estado de devolución (${selected.estado}).`);
-              return;
-            }
-            this.newPeripheral.ubicacion = selected.ubicacion;
-            const dbId = selected._backendId || selected.id;
-            if (dbId) {
-              this.newPeripheral.equipo_asociado = dbId;
-            } else {
-              this.newPeripheral.equipo_asociado = selected.item;
-            }
-          }
-        }
+        // No existe → mostrar formulario de creación de equipo no existente
+        this.pendingPeripheral = { ...this.newPeripheral, item: this.newPeripheral.item || (this.peripheralsList().length + 1) };
+        this.newEquipForAssociation = { item: equipAsociado, serial: '', marca: '', modelo: '', tipo_producto: '', ubicacion: '', anotacion_recepcion: '' };
+        this.popupMode = 'asociar';
+        this.showCreateEquipForm = true;
+        return;
       }
     }
 
@@ -1929,9 +1907,9 @@ export class IngresoComponent implements OnInit {
     }
     // Restaurar campo equipo_asociado
     if (peripheralToEdit.equipo_asociado) {
-      const dbAsset = this.storage.inventario().find(a => a._backendId === peripheralToEdit.equipo_asociado || (a as any).id === peripheralToEdit.equipo_asociado);
       const localAsset = this.equipmentList().find(a => Number(a.item) === peripheralToEdit.equipo_asociado);
-      const found = dbAsset || localAsset;
+      const dbAsset = this.storage.inventario().find(a => a._backendId === peripheralToEdit.equipo_asociado || (a as any).id === peripheralToEdit.equipo_asociado || Number(a.item) === peripheralToEdit.equipo_asociado);
+      const found = localAsset || dbAsset;
       if (found) {
         this.searchAsociarText = `${found.item} - ${found.marca} ${found.modelo} (${found.serial})`;
         this.selectedAsociarAssetObj = found;
@@ -1948,15 +1926,15 @@ export class IngresoComponent implements OnInit {
 
   getAssociatedItemText(associatedValue: number | undefined): string | number {
     if (!associatedValue) return '-';
-    // Buscar si corresponde al ID de base de datos de algún equipo en inventario
-    const dbAsset = this.storage.inventario().find(a => a._backendId === associatedValue || (a as any).id === associatedValue);
-    if (dbAsset) {
-      return dbAsset.item || '-';
-    }
     // Buscar si es un número de ítem local temporal de la recepción
     const localAsset = this.equipmentList().find(a => Number(a.item) === associatedValue);
     if (localAsset) {
       return localAsset.item || '-';
+    }
+    // Buscar si corresponde al ID de base de datos de algún equipo en inventario
+    const dbAsset = this.storage.inventario().find(a => a._backendId === associatedValue || (a as any).id === associatedValue || Number(a.item) === associatedValue);
+    if (dbAsset) {
+      return dbAsset.item || '-';
     }
     return associatedValue;
   }

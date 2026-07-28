@@ -412,9 +412,21 @@ export class HistorialDevolucionesComponent implements OnInit {
     
     return this.allDevoluciones().filter(dev => {
       const matchesStatus = !status || dev.estado === status;
-      const matchesQuery = !query || 
-        dev.id.toString().includes(query) || 
-        dev.items.some(i => i.serial.toLowerCase().includes(query) || i.marca.toLowerCase().includes(query));
+      let matchesQuery = true;
+      if (query) {
+        const terms = query.split(/\s+/);
+        const devId = dev.id != null ? String(dev.id) : '';
+        const persona = (dev.nombre_persona_devolucion || '').toLowerCase();
+        const cedula = (dev.cedula_persona_devolucion || '').toLowerCase();
+        const com = (dev.comentarios || '').toLowerCase();
+        const conf = (dev.confirmado_por_nombre || '').toLowerCase();
+        const itemsText = (dev.items || []).map(i => 
+          `${i.item || ''} ${i.serial || ''} ${i.marca || ''} ${i.modelo || ''} ${i.tipo_producto || ''}`
+        ).join(' ').toLowerCase();
+
+        const fullText = `${devId} ${persona} ${cedula} ${com} ${conf} ${itemsText}`;
+        matchesQuery = terms.every(term => fullText.includes(term));
+      }
       
       return matchesStatus && matchesQuery;
     });

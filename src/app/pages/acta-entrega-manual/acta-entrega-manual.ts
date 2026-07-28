@@ -550,12 +550,17 @@ export class ActaEntregaManualComponent implements OnInit {
       ]);
 
       // Auto-load associated peripherals (excluding pending return, returned or decommissioned)
+      // BUG-2 FIX: usar un Set con todos los IDs posibles (backendId + item number)
+      // El backend normaliza equipo_asociado al item number; si item es null se usa el DB id.
       const matchedId = match._backendId || (match as any).id;
       const matchedItem = match.item;
-      if (matchedId || matchedItem) {
+      const assocIds = new Set<number>();
+      if (matchedId != null) assocIds.add(matchedId);
+      if (matchedItem != null) assocIds.add(matchedItem);
+      if (assocIds.size > 0) {
         const excludedStates = ['EN_ESPERA_DEVOLUCION', 'PENDIENTE_DEVOLUCION', 'DEVUELTO', 'DADO_DE_BAJA'];
         const associated = allAssets.filter(a =>
-          ((matchedId && a.equipo_asociado === matchedId) || (matchedItem && a.equipo_asociado === matchedItem)) &&
+          a.equipo_asociado != null && assocIds.has(a.equipo_asociado) &&
           (!a.estado || !excludedStates.includes(a.estado.toUpperCase()))
         );
         associated.forEach(p => {
